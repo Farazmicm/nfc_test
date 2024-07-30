@@ -12,7 +12,6 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
-
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -26,13 +25,46 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
+    signingConfigs {
+        release {
+            storeFile file('/Users/pareshsheth/NFCAttendanceBuildKey')
+            storePassword 'micm_1983'
+            keyAlias 'key0'
+            keyPassword 'micm_1983'
+        }
+    }
+    packagingOptions {
+        exclude 'META-INF/LICENSE'
+    }
+    buildFeatures {
+        viewBinding true
+    }
 }
 
 dependencies {
 
     implementation libs.appcompat
     implementation libs.material
+    implementation libs.activity
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
+    implementation libs.annotation
+    implementation libs.lifecycle.livedata.ktx
+    implementation libs.lifecycle.viewmodel.ktx
+    implementation libs.navigation.fragment
+    implementation libs.navigation.ui
+    implementation libs.play.services.location
+    androidTestImplementation libs.espresso.core.v330
+    implementation libs.volley
+    implementation libs.glide
+    annotationProcessor libs.compiler
+    implementation libs.gson
+    implementation libs.jackson.databind
+    implementation libs.jackson.core
+    implementation libs.jackson.annotations
+    implementation libs.rootbeer.lib
+    implementation libs.opencsv
+    //compile files('libs/ksoap2-android-assembly-3.1.1-jar-with-dependencie
 }

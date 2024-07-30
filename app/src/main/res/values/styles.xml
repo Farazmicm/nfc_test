@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="ShapeAppearance.App.CircleImageView" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+        <item name="borderWidth">2dp</item>
+    </style>
+
+
+    <style name="CustomCursorEditTextStyle" parent="Widget.AppCompat.EditText">
+        <!-- Replace "your_cursor_color" with the desired color resource or color value -->
+        <item name="android:textCursorDrawable">@drawable/custom_cursor_color</item>
+    </style>
+
+    <style name="Widget.App.Chip" parent="Widget.MaterialComponents.Chip.Entry">
+        <item name="chipIconTint">@color/teal_700</item>
+        <item name="chipBackgroundColor">@color/white</item>
+        <item name="chipStrokeWidth">2dp</item>
+        <item name="chipStrokeColor">@color/teal_700</item>
+        <item name="checkedIconVisible">true</item>
+        <item name="shapeAppearanceOverlay">@null</item>
+    </style>
+
+    <style name="ToolbarColoredBackArrow" parent="Theme.Nfc_test">
+        <item name="android:textColorSecondary">@color/black</item>
+    </style>
+</resources>
