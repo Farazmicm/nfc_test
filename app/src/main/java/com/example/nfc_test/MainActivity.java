@@ -99,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
         //nfcAdapter = NfcAdapter.getDefaultAdapter(this);
         this.finalString = new StringBuilder();
         this.nfcAdapter = NfcAdapter.getDefaultAdapter(this);
-        this.pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
+        this.pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE);
         this.intentFiltersArray = new IntentFilter[]{new IntentFilter("android.nfc.action.TECH_DISCOVERED")};
         this.techListsArray = new String[][]{new String[]{NfcA.class.getName()}, new String[]{MifareClassic.class.getName()}};
 

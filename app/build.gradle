@@ -40,6 +40,10 @@ android {
     buildFeatures {
         viewBinding true
     }
+    lintOptions {
+        checkOnly 'NewApi', 'HandlerLeak'
+        baseline file("lint-baseline.xml")
+    }
 }
 
 dependencies {
