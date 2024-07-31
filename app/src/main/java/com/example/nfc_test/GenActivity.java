@@ -1,7 +1,6 @@
 package com.example.nfc_test;
 
 
-import static com.example.nfc_test.Utility.exportDataToCSV;
 import static com.example.nfc_test.Utility.getDateDiff;
 import static com.example.nfc_test.Utility.toDec;
 import static com.example.nfc_test.Utility.toHex;
@@ -9,7 +8,6 @@ import static com.example.nfc_test.Utility.toReversedDec;
 import static com.example.nfc_test.Utility.toReversedHex;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.Context;
@@ -20,8 +18,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
+import android.net.Uri;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
 import android.nfc.tech.MifareClassic;
@@ -30,6 +27,7 @@ import android.nfc.tech.NfcA;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Looper;
 import android.provider.Settings;
 import android.text.Editable;
@@ -77,7 +75,10 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.chip.ChipGroup;
 import com.google.gson.Gson;
+import com.opencsv.CSVWriter;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -88,6 +89,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+
 public class GenActivity extends AppCompatActivity {
 
     boolean flag = false;
@@ -136,6 +138,7 @@ public class GenActivity extends AppCompatActivity {
     ArrayList<AttendanceModel> getAttendanceList = new ArrayList<>();
     ArrayList<AttendanceModel> getAttendanceLogList = new ArrayList<>();
     private static final int REQUEST_PERMISSION_CODE = 1;
+    private static final int REQUEST_CODE_MANAGE_EXTERNAL_STORAGE = 101;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -143,7 +146,7 @@ public class GenActivity extends AppCompatActivity {
         setContentView(R.layout.activity_gen);
         db = new DatabaseHandler(GenActivity.this);
 
-//        db.deleteAttendanceAllRecords();
+////        db.deleteAttendanceAllRecords();
 //        Gson gson = new Gson();
 //        List<UserAttendanceExternalAPIVM> externalAPIVMList = new ArrayList<UserAttendanceExternalAPIVM>();
 //        UserAttendanceExternalAPIVM externalAPIVM = new UserAttendanceExternalAPIVM("1", MyVariables.deviceID, "2023-10-10", "10:10:00", "Default", "Car", lattitude, longtitude, "10", true, true, "In", false, "reason");
@@ -155,10 +158,10 @@ public class GenActivity extends AppCompatActivity {
 //        db.addAttendance(new AttendanceModel(2, "2023-10-18", "strCardNumber2", "sds2", "sds2", "BUS", "Error", json));
 //        db.addAttendance(new AttendanceModel(3, "2023-10-12", "strCardNumber3", "sds3", "sds3", "GATE", "200", json));
 //        db.addAttendance(new AttendanceModel(4, "2023-10-18", "strCardNumber4", "sds4", "sds4", "BUS", "Error", json));
-
-//        db.addAttendanceLog(new AttendanceModel(1, "2023-10-10", "200", "200"));
-//        db.addAttendanceLog(new AttendanceModel(2, "2023-10-13", "201", "200"));
-//        db.addAttendanceLog(new AttendanceModel(3, "2023-10-18","202", "Error"));
+//
+////        db.addAttendanceLog(new AttendanceModel(1, "2023-10-10", "200", "200"));
+////        db.addAttendanceLog(new AttendanceModel(2, "2023-10-13", "201", "200"));
+////        db.addAttendanceLog(new AttendanceModel(3, "2023-10-18","202", "Error"));
 
         getScannedAttendanceList();
 //      getScannedAttendanceLogList();
@@ -168,7 +171,7 @@ public class GenActivity extends AppCompatActivity {
 
         try {
             this.nfcAdapter = NfcAdapter.getDefaultAdapter(this);
-            this.pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE);
+            this.pendingIntent = PendingIntent.getActivity(GenActivity.this, 0, new Intent(GenActivity.this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_MUTABLE);
             this.intentFiltersArray = new IntentFilter[]{new IntentFilter("android.nfc.action.TECH_DISCOVERED")};
             this.techListsArray = new String[][]{new String[]{NfcA.class.getName()}, new String[]{MifareClassic.class.getName()}};
             this.resetMCard = findViewById(R.id.resetMCard);
@@ -215,7 +218,7 @@ public class GenActivity extends AppCompatActivity {
             }
 
 
-            if (MyVariables.lstScannedUsers.size() > 0) {
+            if (!MyVariables.lstScannedUsers.isEmpty()) {
                 displayScannedDetails();
             }
             findViewById(R.id.fabViewData).setOnClickListener(new View.OnClickListener() {
@@ -223,18 +226,18 @@ public class GenActivity extends AppCompatActivity {
                 public void onClick(View view) {
 
                     //MyVariables.CARD_AUTH_KEY == temp || MyVariables.SECTOR_NUMBER == 0
-                    if (checkInternet()) {
+                    if (Utility.checkInternet(GenActivity.this)) {
                         //isShowStudentData = true;
                         new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
                         //LinearLayout studentDataContainer = (LinearLayout) findViewById(R.id.studentDataContainer);
                         //studentDataContainer.setVisibility(View.VISIBLE);
-                        /*if (studentDataContainer.getVisibility() == View.VISIBLE) {
-                            studentDataContainer.setVisibility(View.GONE);
-                        } else {
-                            studentDataContainer.setVisibility(View.VISIBLE);
-                        }*/
+                       /*if (studentDataContainer.getVisibility() == View.VISIBLE) {
+                           studentDataContainer.setVisibility(View.GONE);
+                       } else {
+                           studentDataContainer.setVisibility(View.VISIBLE);
+                       }*/
                     } else {
-                        openInternetNotAvailable("");
+                        Utility.openInternetNotAvailable(GenActivity.this, "");
                     }
                 }
             });
@@ -242,7 +245,7 @@ public class GenActivity extends AppCompatActivity {
             findViewById(R.id.btnUserSearch).setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    showSearchedUsers(editTextSearchText.getText().toString());
+                     showSearchedUsers(editTextSearchText.getText().toString());
                 }
             });
 
@@ -264,23 +267,23 @@ public class GenActivity extends AppCompatActivity {
                 }
             });
 
-            /*findViewById(R.id.fabRefreshMasterCard).setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    MyVariables.CARD_AUTH_KEY = new byte[6];
-                    MyVariables.SECTOR_NUMBER = 0;
-                    reading_data.setText("Data reset successfully. Now tap Master Card.");
-                    new KeyGenerator().isStudent = false;
-                    lnUserInformation.setVisibility(View.GONE);
-                    MyVariables.scanedCard = new ArrayList<String>();
-                    scanned_data.setText("");
-                }
-            });*/
+           /*findViewById(R.id.fabRefreshMasterCard).setOnClickListener(new View.OnClickListener() {
+               @Override
+               public void onClick(View view) {
+                   MyVariables.CARD_AUTH_KEY = new byte[6];
+                   MyVariables.SECTOR_NUMBER = 0;
+                   reading_data.setText("Data reset successfully. Now tap Master Card.");
+                   new KeyGenerator().isStudent = false;
+                   lnUserInformation.setVisibility(View.GONE);
+                   MyVariables.scanedCard = new ArrayList<String>();
+                   scanned_data.setText("");
+               }
+           });*/
 
-            if (checkInternet()) {
+            if (Utility.checkInternet(GenActivity.this)) {
                 new StudentDataCall(this, (StudentDataCall) null).execute();
             } else {
-                openInternetNotAvailable("");
+                Utility.openInternetNotAvailable(GenActivity.this, "");
             }
 
             try {
@@ -305,32 +308,34 @@ public class GenActivity extends AppCompatActivity {
             }
 
             busSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (isChecked) {
-                    deviceType = "bus";
-                    gateSwitch.setChecked(false);
-                } else {
-                    deviceType = "gate";
-                    gateSwitch.setChecked(true);
-                }
-                if (checkInternet()) {
+                if (Utility.checkInternet(GenActivity.this)) {
+                    if (isChecked) {
+                        deviceType = "bus";
+                        gateSwitch.setChecked(false);
+                    } else {
+                        deviceType = "gate";
+                        gateSwitch.setChecked(true);
+                    }
                     new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
                 } else {
-                    openInternetNotAvailable("");
+                    busSwitch.setChecked(!isChecked);
+                    Utility.openInternetNotAvailable(GenActivity.this, "");
                 }
             });
 
             gateSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (isChecked) {
-                    deviceType = "gate";
-                    busSwitch.setChecked(false);
-                } else {
-                    deviceType = "bus";
-                    busSwitch.setChecked(true);
-                }
-                if (checkInternet()) {
+                if (Utility.checkInternet(GenActivity.this)) {
+                    if (isChecked) {
+                        deviceType = "gate";
+                        busSwitch.setChecked(false);
+                    } else {
+                        deviceType = "bus";
+                        busSwitch.setChecked(true);
+                    }
                     new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
                 } else {
-                    openInternetNotAvailable("");
+                    gateSwitch.setChecked(!isChecked);
+                    Utility.openInternetNotAvailable(GenActivity.this, "");
                 }
             });
 
@@ -343,10 +348,10 @@ public class GenActivity extends AppCompatActivity {
 //                    //Log.v("Selected chipGroup", selectedCHip.getText() + "");
 //                    deviceType = selectedCHip.getText().toString().toLowerCase();
 //
-//                    if (checkInternet()) {
+//                   if (Utility.checkInternet(GenActivity.this)) {
 //                        new GenActivity.StudentDataCall(GenActivity.this, (GenActivity.StudentDataCall) null).execute();
 //                    } else {
-//                        openInternetNotAvailable("");
+//                        Utility.openInternetNotAvailable(GenActivity.this,"");
 //                    }
 //                }
 //            });
@@ -356,10 +361,10 @@ public class GenActivity extends AppCompatActivity {
 
 
 
-            /*drpTripRoute = findViewById(R.id.drpTripRoute);
-            String[] items = new String[]{"1", "2", "three"};
-            ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, items);
-            drpTripRoute.setAdapter(adapter);*/
+           /*drpTripRoute = findViewById(R.id.drpTripRoute);
+           String[] items = new String[]{"1", "2", "three"};
+           ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, items);
+           drpTripRoute.setAdapter(adapter);*/
 
         } catch (Exception e) {
             //showDialog("Message", e.toString());
@@ -579,18 +584,18 @@ public class GenActivity extends AppCompatActivity {
         } else if (itemId == R.id.menu_info) {
             showUserInformation();
         } else if (itemId == R.id.view_student_data) {
-            if (checkInternet()) {
+            if (Utility.checkInternet(GenActivity.this)) {
                 isShowStudentData = true;
                 new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
                 LinearLayout studentDataContainer = (LinearLayout) findViewById(R.id.studentDataContainer);
                 studentDataContainer.setVisibility(View.VISIBLE);
-                        /*if (studentDataContainer.getVisibility() == View.VISIBLE) {
-                            studentDataContainer.setVisibility(View.GONE);
-                        } else {
-                            studentDataContainer.setVisibility(View.VISIBLE);
-                        }*/
+                       /*if (studentDataContainer.getVisibility() == View.VISIBLE) {
+                           studentDataContainer.setVisibility(View.GONE);
+                       } else {
+                           studentDataContainer.setVisibility(View.VISIBLE);
+                       }*/
             } else {
-                openInternetNotAvailable("");
+                Utility.openInternetNotAvailable(GenActivity.this, "");
             }
         } else if (itemId == R.id.menu_setting) {
             AlertDialog alertDialog = MyVariables.getDefaultDialog(this, "", "Are you sure, you want to reset Master Card ?");
@@ -618,7 +623,7 @@ public class GenActivity extends AppCompatActivity {
         } else if (itemId == R.id.download_attendance_report) {
             if (!db.getAllAttendanceList().isEmpty()) {
                 // Check if permissions are already granted
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
                     if (checkStoragePermission()) {
                         // Permissions are already granted, perform your actions here
                         exportToCSVFile();
@@ -672,10 +677,10 @@ public class GenActivity extends AppCompatActivity {
                     for (AttendanceModel attendance : db.getAllAttendanceList()) {
                         if (!attendance.getStatus().isEmpty() && attendance.getStatus().contains("Error")) {
                             //TODO Call Attendance manual Api
-                            if (checkInternet()) {
+                            if (Utility.checkInternet(GenActivity.this)) {
                                 new StudentManualAttendancePushCall(GenActivity.this, (StudentManualAttendancePushCall) null).execute(attendance);
                             } else {
-                                openInternetNotAvailable("");
+                                Utility.openInternetNotAvailable(GenActivity.this, "");
                                 break;
                             }
                             Log.e("attendance", attendance.getData());
@@ -765,10 +770,10 @@ public class GenActivity extends AppCompatActivity {
                 @Override
                 public void onClick(DialogInterface arg0, int arg1) {
 
-                    if (checkInternet()) {
+                    if (Utility.checkInternet(GenActivity.this)) {
                         new LogoutCall(GenActivity.this, (LogoutCall) null).execute();
                     } else {
-                        openInternetNotAvailable("");
+                        Utility.openInternetNotAvailable(GenActivity.this, "");
                     }
                 }
             });
@@ -797,10 +802,10 @@ public class GenActivity extends AppCompatActivity {
 
     public void onResume() {
         super.onResume();
-        if (!checkInternet()) {
-            openInternetNotAvailable("");
-            return;
-        }
+//        if (!Utility.checkInternet(GenActivity.this)) {
+//            Utility.openInternetNotAvailable(GenActivity.this, "");
+//            return;
+//        }
         if (this.nfcAdapter != null) {
             this.nfcAdapter.enableForegroundDispatch(this, this.pendingIntent, this.intentFiltersArray, this.techListsArray);
         }
@@ -811,6 +816,7 @@ public class GenActivity extends AppCompatActivity {
     @Override
     public void onBackPressed() {
 
+        super.onBackPressed();
         AlertDialog alertDialog = MyVariables.getDefaultDialog(this, "Edusprint Attendance", "Are you sure, you want to exit?");
         assert alertDialog != null;
         alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Yes", new DialogInterface.OnClickListener() {
@@ -830,7 +836,7 @@ public class GenActivity extends AppCompatActivity {
 
     public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        new KeyGenerator(this, (KeyGenerator) null).execute(new Intent[]{intent});
+        new KeyGenerator(GenActivity.this, (KeyGenerator) null).execute(new Intent[]{intent});
     }
 
 
@@ -843,8 +849,12 @@ public class GenActivity extends AppCompatActivity {
                     public void click(int index, UserDetailsResult detailsResult) {
                         try {
                             if (!detailsResult.getRFIDNumbers().isEmpty()) {
-                                String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
-                                new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                                if (Utility.checkInternet(GenActivity.this)) {
+                                    String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
+                                    new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                                } else {
+                                    Utility.openInternetNotAvailable(GenActivity.this, "");
+                                }
                             }
                         } catch (Exception ex) {
                             if (!MyVariables.IsProduction) {
@@ -875,8 +885,12 @@ public class GenActivity extends AppCompatActivity {
                             public void click(int index, UserDetailsResult detailsResult) {
                                 try {
                                     if (!detailsResult.getRFIDNumbers().isEmpty()) {
-                                        String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
-                                        new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                                        if (Utility.checkInternet(GenActivity.this)) {
+                                            String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
+                                            new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                                        } else {
+                                            Utility.openInternetNotAvailable(GenActivity.this, "");
+                                        }
                                     }
                                 } catch (Exception ex) {
                                     if (!MyVariables.IsProduction) {
@@ -892,14 +906,14 @@ public class GenActivity extends AppCompatActivity {
                         lblDataTitle.setVisibility(View.VISIBLE);
                         lySearchContainer.setVisibility(View.VISIBLE);
                     } else {
-                        openInternetNotAvailable("No user(s) found, try other search.");
+                        Utility.openInternetNotAvailable(GenActivity.this, "No user(s) found, try other search.");
                     }
                 }
             }
 
 
         } catch (Exception ex) {
-            openInternetNotAvailable("Err: " + ex.toString());
+            Utility.openInternetNotAvailable(GenActivity.this, "Err: " + ex.toString());
         }
     }
 
@@ -914,10 +928,10 @@ public class GenActivity extends AppCompatActivity {
 //                    deviceType = "gate";
 //                    gateSwitch.setChecked(true);
 //                }
-////                if (checkInternet()) {
+////               if (Utility.checkInternet(GenActivity.this)) {
 ////                    new GenActivity.StudentDataCall(GenActivity.this, (GenActivity.StudentDataCall) null).execute();
 ////                } else {
-////                    openInternetNotAvailable("");
+////                    Utility.openInternetNotAvailable(GenActivity.this,"");
 ////                }
 //                Log.e("bus", String.valueOf(isChecked));
 //            }
@@ -940,10 +954,10 @@ public class GenActivity extends AppCompatActivity {
 ////                    busSwitch.setChecked(!busSwitch.isChecked());
 ////                }
 ////
-////                if (checkInternet()) {
+////               if (Utility.checkInternet(GenActivity.this)) {
 ////                    new GenActivity.StudentDataCall(GenActivity.this, (GenActivity.StudentDataCall) null).execute();
 ////                } else {
-////                    openInternetNotAvailable("");
+////                    Utility.openInternetNotAvailable(GenActivity.this,"");
 ////                }
 //                Log.e("gate", String.valueOf(isChecked));
 //            }
@@ -1581,7 +1595,7 @@ public class GenActivity extends AppCompatActivity {
                 if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)
                         || NfcAdapter.ACTION_TECH_DISCOVERED.equals(action)
                         || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
-                    Tag tag =  intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+                    Tag tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
                     String payload = detectTagData(tag);
 
 //                    StringBuilder sb = new StringBuilder();
@@ -2033,11 +2047,11 @@ public class GenActivity extends AppCompatActivity {
 
                     //StudentData.this.student_data.append(result);
 
-                /*StudentDataAdapter adapter = new StudentDataAdapter(getApplicationContext(), R.id.title, participantJsonList);
-                listViewStudentData.setAdapter(adapter);
+               /*StudentDataAdapter adapter = new StudentDataAdapter(getApplicationContext(), R.id.title, participantJsonList);
+               listViewStudentData.setAdapter(adapter);
 
-                listViewStudentData.setVisibility(View.GONE);
-                ((Button) findViewById(R.id.buttonShowData)).setVisibility(View.VISIBLE); */
+               listViewStudentData.setVisibility(View.GONE);
+               ((Button) findViewById(R.id.buttonShowData)).setVisibility(View.VISIBLE); */
 
 
                     if (isShowStudentData) {
@@ -2046,8 +2060,12 @@ public class GenActivity extends AppCompatActivity {
                             public void click(int index, UserDetailsResult detailsResult) {
                                 try {
                                     if (!detailsResult.getRFIDNumbers().isEmpty()) {
-                                        String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
-                                        new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                                        if (Utility.checkInternet(GenActivity.this)) {
+                                            String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
+                                            new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                                        } else {
+                                            Utility.openInternetNotAvailable(GenActivity.this, "");
+                                        }
                                     }
                                 } catch (Exception ex) {
                                     if (!MyVariables.IsProduction) {
@@ -2229,11 +2247,11 @@ public class GenActivity extends AppCompatActivity {
 
                                                             MyVariables.lstScannedUsers.add(finalDetailsResult);
                                                             MyVariables.lstSuccessUsersList.add(finalDetailsResult);
-                                                            /*scanned_data.setText("");
-                                                            scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
-                                                            for (String scancard : MyVariables.scanedCard) {
-                                                                scanned_data.append("\n" + scancard);
-                                                            }*/
+                                                           /*scanned_data.setText("");
+                                                           scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                           for (String scancard : MyVariables.scanedCard) {
+                                                               scanned_data.append("\n" + scancard);
+                                                           }*/
                                                             displayScannedDetails();
                                                         }
                                                         mToastHandler.showToast(msg, Toast.LENGTH_LONG);
@@ -2274,11 +2292,11 @@ public class GenActivity extends AppCompatActivity {
                                                         MyVariables.lstScannedCard.add(se);
                                                         MyVariables.lstScannedUsers.add(finalDetailsResult);
                                                         MyVariables.lstSuccessUsersList.add(finalDetailsResult);
-                                                        /*scanned_data.setText("");
-                                                        scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
-                                                        for (String scancard : MyVariables.scanedCard) {
-                                                            scanned_data.append("\n" + scancard);
-                                                        }*/
+                                                       /*scanned_data.setText("");
+                                                       scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                       for (String scancard : MyVariables.scanedCard) {
+                                                           scanned_data.append("\n" + scancard);
+                                                       }*/
                                                         displayScannedDetails();
                                                     }
                                                     mToastHandler.showToast("Attendance not taken for this user.", Toast.LENGTH_LONG);
@@ -2332,11 +2350,11 @@ public class GenActivity extends AppCompatActivity {
                                                         se.attendanceTakenTime = attendanceTakeTime;
 
                                                         MyVariables.lstScannedCard.add(se);
-                                                        /*scanned_data.setText("");
-                                                        scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
-                                                        for (String scancard : MyVariables.scanedCard) {
-                                                            scanned_data.append("\n" + scancard);
-                                                        }*/
+                                                       /*scanned_data.setText("");
+                                                       scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                       for (String scancard : MyVariables.scanedCard) {
+                                                           scanned_data.append("\n" + scancard);
+                                                       }*/
 
                                                         displayScannedDetails();
                                                     }
@@ -2387,11 +2405,11 @@ public class GenActivity extends AppCompatActivity {
 
                                                     MyVariables.lstScannedCard.add(se);
 
-                                                    /*scanned_data.setText("");
-                                                    scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
-                                                    for (String scancard : MyVariables.scanedCard) {
-                                                        scanned_data.append("\n" + scancard);
-                                                    }*/
+                                                   /*scanned_data.setText("");
+                                                   scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                   for (String scancard : MyVariables.scanedCard) {
+                                                       scanned_data.append("\n" + scancard);
+                                                   }*/
                                                     displayScannedDetails();
                                                 }
 
@@ -2441,20 +2459,20 @@ public class GenActivity extends AppCompatActivity {
                 setStatus("Error - " + ex.getMessage(), model, false);
                 progressDialog.dismiss();
                 Log.v("Error", ex.toString());
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, "Edusprint Attendance", "This scanned card is not found or not configured in the system.");
-                        assert alertDialog != null;
-                        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface arg0, int arg1) {
-
-                            }
-                        });
-                        alertDialog.show();
-                    }
-                });
+//                runOnUiThread(new Runnable() {
+//                    @Override
+//                    public void run() {
+//                        AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, "Edusprint Attendance", "This scanned card is not found or not configured in the system.");
+//                        assert alertDialog != null;
+//                        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
+//                            @Override
+//                            public void onClick(DialogInterface arg0, int arg1) {
+//
+//                            }
+//                        });
+//                        alertDialog.show();
+//                    }
+//                });
 
             }
             return null;
@@ -2480,9 +2498,9 @@ public class GenActivity extends AppCompatActivity {
         TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
         scanned_data.setText("");
         scanned_data.setText("\nYou have scanned below Card(s), today. (" + MyVariables.lstScannedCard.size() + ")");
-        /*for (String scancard : MyVariables.scanedCard) {
-            scanned_data.append("\n" + scancard);
-        }*/
+       /*for (String scancard : MyVariables.scanedCard) {
+           scanned_data.append("\n" + scancard);
+       }*/
 
         scannedDataRecyclerViewBind = new ScannedDataRecyclerViewBind(MyVariables.lstScannedCard, getApplication());
         scannedRCV.setAdapter(scannedDataRecyclerViewBind);
@@ -2636,30 +2654,6 @@ public class GenActivity extends AppCompatActivity {
 
     //#endregion BackGroundTask
 
-    public boolean checkInternet() {
-        boolean connected = false;
-        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_MOBILE).getState() == NetworkInfo.State.CONNECTED || connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI).getState() == NetworkInfo.State.CONNECTED) {
-            connected = true;
-        }
-        return connected;
-    }
-
-    public void openInternetNotAvailable(String message) {
-        if (message.isEmpty()) {
-            message = "Internet connection is not available. Please connect to internet.";
-        }
-        AlertDialog alertDialog = MyVariables.getDefaultDialog(this, "", message);
-        assert alertDialog != null;
-        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface arg0, int arg1) {
-            }
-        });
-        alertDialog.show();
-    }
-
-
     private boolean checkStoragePermission() {
         int readPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE);
         int writePermission = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
@@ -2670,6 +2664,13 @@ public class GenActivity extends AppCompatActivity {
         ActivityCompat.requestPermissions(this,
                 new String[]{Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE},
                 REQUEST_PERMISSION_CODE);
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+//            if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+//                    || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+//                requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE},
+//                        REQUEST_PERMISSION_CODE);
+//            }
+//        }
     }
 
     private void exportToCSVFile() {
@@ -2782,11 +2783,11 @@ public class GenActivity extends AppCompatActivity {
 
                                                         MyVariables.lstScannedUsers.add(finalDetailsResult);
                                                         MyVariables.lstSuccessUsersList.add(finalDetailsResult);
-                                                            /*scanned_data.setText("");
-                                                            scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
-                                                            for (String scancard : MyVariables.scanedCard) {
-                                                                scanned_data.append("\n" + scancard);
-                                                            }*/
+                                                           /*scanned_data.setText("");
+                                                           scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                           for (String scancard : MyVariables.scanedCard) {
+                                                               scanned_data.append("\n" + scancard);
+                                                           }*/
                                                         displayScannedDetails();
                                                     }
                                                     mToastHandler.showToast(msg, Toast.LENGTH_LONG);
@@ -2827,11 +2828,11 @@ public class GenActivity extends AppCompatActivity {
                                                     MyVariables.lstScannedCard.add(se);
                                                     MyVariables.lstScannedUsers.add(finalDetailsResult);
                                                     MyVariables.lstSuccessUsersList.add(finalDetailsResult);
-                                                        /*scanned_data.setText("");
-                                                        scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
-                                                        for (String scancard : MyVariables.scanedCard) {
-                                                            scanned_data.append("\n" + scancard);
-                                                        }*/
+                                                       /*scanned_data.setText("");
+                                                       scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                       for (String scancard : MyVariables.scanedCard) {
+                                                           scanned_data.append("\n" + scancard);
+                                                       }*/
                                                     displayScannedDetails();
                                                 }
 //                                                mToastHandler.showToast("Attendance not taken for this user.", Toast.LENGTH_LONG);
@@ -2885,11 +2886,11 @@ public class GenActivity extends AppCompatActivity {
                                                     se.attendanceTakenTime = model.getDateTime();
 
                                                     MyVariables.lstScannedCard.add(se);
-                                                        /*scanned_data.setText("");
-                                                        scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
-                                                        for (String scancard : MyVariables.scanedCard) {
-                                                            scanned_data.append("\n" + scancard);
-                                                        }*/
+                                                       /*scanned_data.setText("");
+                                                       scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                       for (String scancard : MyVariables.scanedCard) {
+                                                           scanned_data.append("\n" + scancard);
+                                                       }*/
 
                                                     displayScannedDetails();
                                                 }
@@ -2937,11 +2938,11 @@ public class GenActivity extends AppCompatActivity {
 
                                                 MyVariables.lstScannedCard.add(se);
 
-                                                    /*scanned_data.setText("");
-                                                    scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
-                                                    for (String scancard : MyVariables.scanedCard) {
-                                                        scanned_data.append("\n" + scancard);
-                                                    }*/
+                                                   /*scanned_data.setText("");
+                                                   scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                   for (String scancard : MyVariables.scanedCard) {
+                                                       scanned_data.append("\n" + scancard);
+                                                   }*/
                                                 displayScannedDetails();
                                             }
 
@@ -3088,6 +3089,102 @@ public class GenActivity extends AppCompatActivity {
 
 
         return sb.toString();
+    }
+
+    public void exportDataToCSV(Context context, DatabaseHandler db) {
+        // Sample data (replace with your actual data)
+//        File documentsFolder;
+//        String downloadsPath;
+
+//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+////                // For Android 10 (Q) and higher, use the Downloads directory
+//                documentsFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+//                downloadsPath = Environment.DIRECTORY_DOWNLOADS;
+//
+//            } else {
+//                // For Android versions lower than 10, use the external storage directory
+//                documentsFolder = Environment.getExternalStorageDirectory();
+//                downloadsPath = Environment.getExternalStorageDirectory() + "/Download";
+//            }
+
+        //for Attendance Report
+        if (!db.getAllAttendanceList().isEmpty()) {
+            //old
+//              File file = new File(documentsFolder, "attendance_sheet.csv");
+////            File file = new File(downloadsPath, fileName);
+//
+//                FileWriter fileWriter = new FileWriter(file);
+//                CSVWriter csvWriter = new CSVWriter(fileWriter);
+//
+//                if (!file.exists()) {
+//                    String[] header = new String[]{"Id", "DateTime", "Scanned Card", "Class Name", "Name", "Device Type", "Sync Type", "Status"};
+//                    csvWriter.writeNext(header);
+//                }
+//                // Write data
+//                for (AttendanceModel model : db.getAllAttendanceList()) {
+//                    String[] data = {String.valueOf(model.getId()), model.getDateTime(), model.getScannedCard(), model.getClassName(), model.getName(), model.getType(), model.getSyncType(), model.getStatus()};
+//                    csvWriter.writeNext(data);
+//                }
+//                csvWriter.close();
+
+            //new
+            List<String[]> data = new ArrayList<>();
+            data.add(new String[]{"Id", "DateTime", "Scanned Card", "Class Name", "Name", "Device Type", "Sync Type", "Status"});
+
+            for (AttendanceModel model : db.getAllAttendanceList()) {
+                data.add(new String[]{String.valueOf(model.getId()), model.getDateTime(), model.getScannedCard(), model.getClassName(), model.getName(), model.getType(), model.getSyncType(), model.getStatus()});
+            }
+
+            try {
+                writeDataToCSV("attendance_sheet.csv", data);
+                Toast.makeText(GenActivity.this, "CSV file saved to Downloads folder", Toast.LENGTH_SHORT).show();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void requestManageExternalStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                Uri uri = Uri.fromParts("package", getPackageName(), null);
+                intent.setData(uri);
+                startActivityForResult(intent, REQUEST_CODE_MANAGE_EXTERNAL_STORAGE);
+            }
+        }
+    }
+
+    public void writeDataToCSV(String fileName, List<String[]> data) throws IOException {
+        File outputFile;
+        if (isExternalStorageAvailable() && !isExternalStorageReadOnly()) {
+            // External storage is available, store in Download folder
+            File outputDirectory = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            File folder = new File(outputDirectory, "AttendenceApp"); // Create a new folder
+            if (!folder.exists()) {
+                folder.mkdirs(); // Create the folder if it doesn't exist
+            }
+            outputFile = new File(folder, fileName);
+        } else {
+            // External storage is not available, store in internal storage
+            outputFile = new File(getCacheDir(), fileName);
+        }
+
+        try (FileWriter fileWriter = new FileWriter(outputFile);
+             CSVWriter writer = new CSVWriter(fileWriter)) {
+            writer.writeAll(data);
+        }
+    }
+
+    // Create a method to check if the external storage is available and not read-only
+    private boolean isExternalStorageAvailable() {
+        String extStorageState = Environment.getExternalStorageState();
+        return Environment.MEDIA_MOUNTED.equals(extStorageState);
+    }
+
+    private boolean isExternalStorageReadOnly() {
+        String extStorageState = Environment.getExternalStorageState();
+        return Environment.MEDIA_MOUNTED_READ_ONLY.equals(extStorageState);
     }
 
 

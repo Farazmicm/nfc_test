@@ -77,13 +77,13 @@ public class LoginActivity extends AppCompatActivity {
         } catch (Exception e) {
         }
 
-        if(MyVariables.MCAMPUS_TOKENID.isEmpty()) {
+        if (MyVariables.MCAMPUS_TOKENID.isEmpty()) {
             SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.MCAMPUS_TOKEN_ID.toString(), Context.MODE_PRIVATE);
-            String sToken = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.MCAMPUS_TOKEN_ID.toString(),"");
-            if(sToken == "" || sToken == null) {
+            String sToken = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.MCAMPUS_TOKEN_ID.toString(), "");
+            if (sToken == "" || sToken == null) {
                 String mcampusToken = MyVariables.getMCampusToken(this);
                 SharedPreferences.Editor editor = sharedPreferences.edit();
-                editor.putString(MyVariables.DEFAULT_ENUM.MCAMPUS_TOKEN_ID.toString(),mcampusToken);
+                editor.putString(MyVariables.DEFAULT_ENUM.MCAMPUS_TOKEN_ID.toString(), mcampusToken);
                 editor.commit();
             }
         }
@@ -104,8 +104,6 @@ public class LoginActivity extends AppCompatActivity {
                 finish();
             }
         });
-
-
 
 
         findViewById(R.id.buttonLogin).setOnClickListener(new View.OnClickListener() {
@@ -130,10 +128,13 @@ public class LoginActivity extends AppCompatActivity {
                     });
                     alertDialog.show();
                 } else {
-
                     if (!txPassword.getText().toString().isEmpty() && MyVariables.isValidPassword(txPassword.getText().toString())) {
                         try {
-                            new WebCall(LoginActivity.this, (WebCall) null).execute();
+                            if (Utility.checkInternet(LoginActivity.this)) {
+                                new WebCall(LoginActivity.this, (WebCall) null).execute();
+                            } else {
+                                Utility.openInternetNotAvailable(LoginActivity.this, "");
+                            }
                         } catch (Exception e) {
                             if (!MyVariables.IsProduction) {
                                 Log.v("error: ", e.toString());
@@ -159,7 +160,11 @@ public class LoginActivity extends AppCompatActivity {
         findViewById(R.id.btnRefreshCaptcha).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                ResetCaptchaImage();
+                if (Utility.checkInternet(LoginActivity.this)) {
+                    ResetCaptchaImage();
+                } else {
+                    Utility.openInternetNotAvailable(LoginActivity.this, "");
+                }
             }
         });
     }
@@ -179,7 +184,7 @@ public class LoginActivity extends AppCompatActivity {
                     }
                 }
 
-                protected void setImage(Drawable d) {
+                private void setImage(Drawable d) {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -218,7 +223,7 @@ public class LoginActivity extends AppCompatActivity {
                     }
                 }
 
-                protected void setImage(Drawable d) {
+                private void setImage(Drawable d) {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -244,7 +249,7 @@ public class LoginActivity extends AppCompatActivity {
                         public void onSuccess(String result) {
                             Gson gson = new Gson();
                             TokenModel tokenModel = gson.fromJson(result, TokenModel.class);
-                            if (tokenModel.isSuccess()) {
+                            if (tokenModel != null && tokenModel.isSuccess()) {
                                 try {
                                     Thread.sleep(1000);
                                     th.start();
@@ -253,7 +258,9 @@ public class LoginActivity extends AppCompatActivity {
                                         e.printStackTrace();
                                     }
                                 }
-
+                            } else {
+                                findViewById(R.id.btnRefreshCaptcha).setVisibility(View.VISIBLE);
+                                progressDialog.dismiss();
                             }
                         }
                     });

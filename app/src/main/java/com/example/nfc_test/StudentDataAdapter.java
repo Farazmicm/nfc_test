@@ -153,7 +153,7 @@ public class StudentDataAdapter extends ArrayAdapter<UserDetailsResult> {
             }
         }
 
-        protected void showData(String result) {
+        private void showData(String result) {
             Gson gson = new Gson();
             if (!MyVariables.IsProduction) {
                 Log.v("Data", result);

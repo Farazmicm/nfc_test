@@ -34,7 +34,7 @@
     <item
         android:id="@+id/download_attendance_report"
         android:icon="@android:drawable/ic_menu_revert"
-        android:title="Download Attendance Report"
+        android:title="Sync Attendance to Server"
         app:iconTint="@color/black" />
 
 </menu>

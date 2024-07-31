@@ -42,7 +42,11 @@ public class StudentData extends AppCompatActivity {
 
         findViewById(R.id.btnGetData).setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                new WebCall(StudentData.this, (WebCall) null).execute();
+                if (Utility.checkInternet(StudentData.this)) {
+                    new WebCall(StudentData.this, (WebCall) null).execute();
+                } else {
+                    Utility.openInternetNotAvailable(StudentData.this, "");
+                }
             }
         });
     }

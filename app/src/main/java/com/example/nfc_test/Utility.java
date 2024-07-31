@@ -1,20 +1,16 @@
 package com.example.nfc_test;
 
 import android.content.Context;
-import android.os.Build;
-import android.os.Environment;
-import android.widget.Toast;
+import android.content.DialogInterface;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 
-import com.example.nfc_test.db.DatabaseHandler;
-import com.example.nfc_test.models.AttendanceModel;
-import com.opencsv.CSVWriter;
+import androidx.appcompat.app.AlertDialog;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 public class Utility {
@@ -96,64 +92,7 @@ public class Utility {
         return array;
     }
 
-    public static void exportDataToCSV(Context context, DatabaseHandler db) {
-        // Sample data (replace with your actual data)
-        try {
-            File documentsFolder;
-            String downloadsPath;
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-//                // For Android 10 (Q) and higher, use the Downloads directory
-                documentsFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                downloadsPath = Environment.DIRECTORY_DOWNLOADS;
-
-            } else {
-                // For Android versions lower than 10, use the external storage directory
-                documentsFolder = Environment.getExternalStorageDirectory();
-                downloadsPath = Environment.getExternalStorageDirectory() + "/Download";
-            }
-
-            //for Attendance Report
-            if (!db.getAllAttendanceList().isEmpty()) {
-                File file = new File(documentsFolder, "attendance_sheet.csv");
-//            File file = new File(downloadsPath, fileName);
-
-                FileWriter fileWriter = new FileWriter(file);
-                CSVWriter csvWriter = new CSVWriter(fileWriter);
-
-                String[] header = new String[]{"Id", "DateTime", "Scanned Card", "Class Name", "Name", "Device Type", "Sync Type", "Status"};
-                csvWriter.writeNext(header);
-
-                // Write data
-                for (AttendanceModel model : db.getAllAttendanceList()) {
-                    String[] data = {String.valueOf(model.getId()), model.getDateTime(), model.getScannedCard(), model.getClassName(), model.getName(), model.getType(), model.getSyncType(), model.getStatus()};
-                    csvWriter.writeNext(data);
-                }
-                csvWriter.close();
-            }
-            //for Attendence Log
-//            if (!db.getAllAttendanceLogList().isEmpty()) {
-//                File attendanceLogFile = new File(documentsFolder, "attendance_log.csv");
-//
-//                FileWriter fileWriter1 = new FileWriter(attendanceLogFile);
-//                CSVWriter csvWriter1 = new CSVWriter(fileWriter1);
-//
-//                String[] header1 = new String[]{"Id", "DateTime", "Scanned Card", "Status"};
-//                csvWriter1.writeNext(header1);
-//
-//                // Write data
-//                for (AttendanceModel model : db.getAllAttendanceLogList()) {
-//                    String[] data = {String.valueOf(model.getId()), model.getDateTime(),model.getScannedCard(), model.getName()};
-//                    csvWriter1.writeNext(data);
-//                }
-//                csvWriter1.close();
-//            }
-            Toast.makeText(context, "CSV file saved to Downloads folder", Toast.LENGTH_SHORT).show();
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 
     public static long getDateDiff(SimpleDateFormat format, String oldDate, String newDate) {
         try {
@@ -161,6 +100,30 @@ public class Utility {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+
+    public static boolean checkInternet(Context context) {
+        boolean connected = false;
+        ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (Objects.requireNonNull(connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_MOBILE)).getState() == NetworkInfo.State.CONNECTED || connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI).getState() == NetworkInfo.State.CONNECTED) {
+            connected = true;
+        }
+        return connected;
+    }
+
+    public static void openInternetNotAvailable(Context context, String message) {
+        if (message.isEmpty()) {
+            message = "Internet connection is not available. Please connect to internet.";
+        }
+        AlertDialog alertDialog = MyVariables.getDefaultDialog(context, "", message);
+        assert alertDialog != null;
+        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface arg0, int arg1) {
+            }
+        });
+        alertDialog.show();
     }
 
 }

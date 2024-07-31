@@ -99,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
         //nfcAdapter = NfcAdapter.getDefaultAdapter(this);
         this.finalString = new StringBuilder();
         this.nfcAdapter = NfcAdapter.getDefaultAdapter(this);
-        this.pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
+        this.pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_MUTABLE);
         this.intentFiltersArray = new IntentFilter[]{new IntentFilter("android.nfc.action.TECH_DISCOVERED")};
         this.techListsArray = new String[][]{new String[]{NfcA.class.getName()}, new String[]{MifareClassic.class.getName()}};
 
@@ -117,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
         //populate it with the details of the tag when it is scanned.
         //PendingIntent.getActivity(Context,requestcode(identifier for
         //                           intent),intent,int)
-        //pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, this.getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
+        //pendingIntent = PendingIntent.getActivity(this, 0, new.dart Intent(this, this.getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
     }
 
     @Override
@@ -175,7 +175,7 @@ public class MainActivity extends AppCompatActivity {
                     //.append("\nsectorNo : "+ e.sectorID);
                     //tag_data.append("\nsectordata hex: "+ e.sectorHexData);
                     /*try {
-                        tag_data.append("\nsectordata : "+ new String(e.sectorData,"UTF-8"));
+                        tag_data.append("\nsectordata : "+ new.dart String(e.sectorData,"UTF-8"));
                     } catch (UnsupportedEncodingException unsupportedEncodingException) {
                         unsupportedEncodingException.printStackTrace();
                     }*/

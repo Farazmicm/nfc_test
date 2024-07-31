@@ -51,7 +51,11 @@ public class SchoolGroupLogin extends AppCompatActivity {
                     // Showing Alert Message
                     alertDialog.show();
                 } else {
-                    new WebCall(SchoolGroupLogin.this, (WebCall) null).execute();
+                    if (Utility.checkInternet(SchoolGroupLogin.this)) {
+                        new WebCall(SchoolGroupLogin.this, (WebCall) null).execute();
+                    } else {
+                        Utility.openInternetNotAvailable(SchoolGroupLogin.this, "");
+                    }
                 }
             }
         });
