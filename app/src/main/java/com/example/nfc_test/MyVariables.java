@@ -1,4 +1,5 @@
 package com.example.nfc_test;
+
 import android.app.Application;
 import android.content.Context;
 import android.graphics.drawable.Drawable;
@@ -8,7 +9,6 @@ import android.text.Html;
 import android.util.Log;
 
 import com.android.volley.Request;
-import com.example.nfc_test.R;
 import com.example.nfc_test.models.ScannedUserDetailsResult;
 import com.example.nfc_test.models.TokenModel;
 import com.example.nfc_test.models.UserDetailsResult;
@@ -352,7 +352,7 @@ public class MyVariables extends Application {
             androidx.appcompat.app.AlertDialog alertDialog1 = new androidx.appcompat.app.AlertDialog.Builder(context).create();
 
             // Setting Dialog Title
-            alertDialog1.setTitle(title.isEmpty() ? "Edusprint Attendance" : title);
+            alertDialog1.setTitle(title.isEmpty() ? context.getResources().getString(R.string.app_name) : title);
 
             // Setting Dialog Message
 

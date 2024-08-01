@@ -764,7 +764,7 @@ public class GenActivity extends AppCompatActivity {
 
     public void doLogout() {
         try {
-            AlertDialog alertDialog = MyVariables.getDefaultDialog(this, "Edusprint Attendance", "Are you sure, you want to logout?");
+            AlertDialog alertDialog = MyVariables.getDefaultDialog(this, getResources().getString(R.string.app_name), "Are you sure, you want to logout?");
             assert alertDialog != null;
             alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "YES", new DialogInterface.OnClickListener() {
                 @Override
@@ -817,7 +817,7 @@ public class GenActivity extends AppCompatActivity {
     public void onBackPressed() {
 
         super.onBackPressed();
-        AlertDialog alertDialog = MyVariables.getDefaultDialog(this, "Edusprint Attendance", "Are you sure, you want to exit?");
+        AlertDialog alertDialog = MyVariables.getDefaultDialog(this, getResources().getString(R.string.app_name), "Are you sure, you want to exit?");
         assert alertDialog != null;
         alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Yes", new DialogInterface.OnClickListener() {
             @Override
@@ -2137,7 +2137,7 @@ public class GenActivity extends AppCompatActivity {
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, "Edusprint Attendance", "This user is denied because of this reason\n" + deniedReason);
+                                    AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "This user is denied because of this reason\n" + deniedReason);
                                     assert alertDialog != null;
                                     alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
                                         @Override
@@ -2442,7 +2442,7 @@ public class GenActivity extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, "Edusprint Attendance", "This scanned card is not found in the system.");
+                                AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "This scanned card is not found in the system.");
                                 assert alertDialog != null;
                                 alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
                                     @Override
@@ -2462,7 +2462,7 @@ public class GenActivity extends AppCompatActivity {
 //                runOnUiThread(new Runnable() {
 //                    @Override
 //                    public void run() {
-//                        AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, "Edusprint Attendance", "This scanned card is not found or not configured in the system.");
+//                        AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "This scanned card is not found or not configured in the system.");
 //                        assert alertDialog != null;
 //                        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
 //                            @Override
@@ -2629,7 +2629,7 @@ public class GenActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, "Edusprint Attendance", "Something went wrong, Please try after sometime.");
+                        AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "Something went wrong, Please try after sometime.");
                         assert alertDialog != null;
                         alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
                             @Override
