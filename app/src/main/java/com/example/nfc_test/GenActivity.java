@@ -1026,7 +1026,12 @@ public class GenActivity extends AppCompatActivity {
 
                     if (mfc.authenticateSectorWithKeyA(MyVariables.SECTOR_NUMBER, MyVariables.CARD_AUTH_KEY)) {
                         byte[] data = mfc.readBlock(mfc.sectorToBlock(MyVariables.SECTOR_NUMBER));
-
+                        if (!MyVariables.IsProduction) {
+                            Log.v("Sector number", String.valueOf(MyVariables.SECTOR_NUMBER));
+                        }
+                        if (!MyVariables.IsProduction) {
+                            Log.v("card auth key", Arrays.toString(MyVariables.CARD_AUTH_KEY));
+                        }
                         String hexData = Utility.toReversedHex(data);
                         if (!MyVariables.IsProduction) {
                             Log.v("Rev. Hex Data", hexData);
@@ -2095,7 +2100,7 @@ public class GenActivity extends AppCompatActivity {
             }
         }
     }
-
+    //TODO card read
     private class StudentAttendancePushCall extends AsyncTask<String, Void, Void> {
         ProgressDialog progressDialog;
 
