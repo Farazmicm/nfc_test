@@ -2158,7 +2158,7 @@ public class GenActivity extends AppCompatActivity {
                         Map<String, String> params = new HashMap<>();
                         List<UserAttendanceExternalAPIVM> externalAPIVMList = new ArrayList<UserAttendanceExternalAPIVM>();
                         String attendanceTakeTime = MyVariables.getSystemDateTime();
-                        UserAttendanceExternalAPIVM externalAPIVM = new UserAttendanceExternalAPIVM(strCardNumber, MyVariables.deviceID, attendanceTakeTime, attendanceTakeTime, "Default", "Car", lattitude, longtitude, "10", true, Objects.equals(deviceType, "bus"), "In", !isAllowed, oDeniedReason);
+                        UserAttendanceExternalAPIVM externalAPIVM = new UserAttendanceExternalAPIVM(strCardNumber, MyVariables.deviceID, attendanceTakeTime, attendanceTakeTime, "Default", Objects.equals(deviceType, "bus") ? "Bus" : "Car", lattitude, longtitude, "10", true, Objects.equals(deviceType, "bus"), "In", !isAllowed, oDeniedReason);
                         externalAPIVMList.add(externalAPIVM);
                         Gson gson = new Gson();
 
