@@ -106,6 +106,7 @@ public class GenActivity extends AppCompatActivity {
     TextView api_data;
     ResponseModel responseModel2;
     List<UserDetailsResult> finaluserDetailsResults;
+    List<UserDetailsResult> participantJsonList;
     Toolbar toolbar;
 
 
@@ -245,7 +246,7 @@ public class GenActivity extends AppCompatActivity {
             findViewById(R.id.btnUserSearch).setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                     showSearchedUsers(editTextSearchText.getText().toString());
+                    showSearchedUsers(editTextSearchText.getText().toString());
                 }
             });
 
@@ -289,7 +290,6 @@ public class GenActivity extends AppCompatActivity {
             try {
                 //Location
                 mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-                //loca
 
                 if (mFusedLocationClient != null) {
                     getLastLocation();
@@ -870,7 +870,7 @@ public class GenActivity extends AppCompatActivity {
                 lblDataTitle.setVisibility(View.VISIBLE);
                 lySearchContainer.setVisibility(View.VISIBLE);
             } else {
-                if (finaluserDetailsResults.size() > 0) {
+                if (!finaluserDetailsResults.isEmpty()) {
                     searchTerm = searchTerm.toLowerCase();
                     List<UserDetailsResult> lstSearchData = new ArrayList<UserDetailsResult>();
                     for (UserDetailsResult us : finaluserDetailsResults) {
@@ -878,7 +878,7 @@ public class GenActivity extends AppCompatActivity {
                             lstSearchData.add(us);
                         }
                     }
-                    if (lstSearchData.size() > 0) {
+                    if (!lstSearchData.isEmpty()) {
                         recyclerView.setVisibility(View.GONE);
                         listener = new ClickListener() {
                             @Override
@@ -964,6 +964,7 @@ public class GenActivity extends AppCompatActivity {
 //        }
 //    }
 
+    //todo rfid card reader
     //#region BackGroundTask
     private class KeyGenerator extends AsyncTask<Intent, Void, String> {
         ProgressDialog progressDialog;
@@ -2036,13 +2037,18 @@ public class GenActivity extends AppCompatActivity {
                     mToastHandler.showToast(result, Toast.LENGTH_LONG);
                     startActivity(new Intent(GenActivity.this, SplashScreen.class));
                 } else {
-                    List<UserDetailsResult> participantJsonList = mapper.readValue(result, new TypeReference<List<UserDetailsResult>>() {
-                    });
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        participantJsonList.removeIf(filter -> filter.UserName.equalsIgnoreCase("mobileverifieduser") || filter.UserFullName == "" || filter.UserFullName == null);
+                    List<UserDetailsResult> JsonList = mapper.readValue(result, new TypeReference<List<UserDetailsResult>>() {});
 
-                        finaluserDetailsResults = participantJsonList;
+                    for (int i = 0; i < JsonList.size(); i++) {
+                        if (JsonList.get(i).UserName.equalsIgnoreCase("mobileverifieduser") || Objects.equals(JsonList.get(i).getUserName(), "") || JsonList.get(i).getUserName() == null) {
+                            JsonList.remove(i);
+                        }
                     }
+                    participantJsonList = JsonList;
+//                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+//                        participantJsonList.removeIf(filter -> filter.UserName.equalsIgnoreCase("mobileverifieduser") || Objects.equals(filter.getUserName(), "") || filter.getUserName() == null);
+                    finaluserDetailsResults = participantJsonList;
+//                    }
                     //StudentDataCall.this.student_data.setText("Total: " + participantJsonList.size());
 
                     SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), Context.MODE_PRIVATE);

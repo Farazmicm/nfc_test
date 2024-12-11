@@ -1,5 +1,8 @@
 package com.example.nfc_test.models;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class UserDetailsResult {
     public int UserID;
     public String UserName;
@@ -14,6 +17,24 @@ public class UserDetailsResult {
     public boolean IsActive;
     public boolean IsDenied;
     public String DeniedReason;
+    public boolean isParentRFIDCheckRequired;
+    public List<ParentRFID> parentRFIDs = new ArrayList<ParentRFID>();
+
+    public boolean getParentRFIDCheckRequired() {
+        return isParentRFIDCheckRequired;
+    }
+
+    public void setParentRFIDCheckRequired(boolean parentRFIDCheckRequired) {
+        isParentRFIDCheckRequired = parentRFIDCheckRequired;
+    }
+
+    public List<ParentRFID> getParentRFIDs() {
+        return parentRFIDs;
+    }
+
+    public void setParentRFIDs(List<ParentRFID> parentRFIDs) {
+        this.parentRFIDs = parentRFIDs;
+    }
 
     public boolean isDenied() {
         return IsDenied;
@@ -120,4 +141,34 @@ public class UserDetailsResult {
         this.RFIDNumbers = RFIDNumbers;
     }
 
+    public class ParentRFID {
+        private Integer userRFIDID;
+        private Integer userID;
+        private String rFID;
+        private boolean isDeActive;
+        public Integer getUserRFIDID() {
+            return userRFIDID;
+        }
+        public void setUserRFIDID(Integer userRFIDID) {
+            this.userRFIDID = userRFIDID;
+        }
+        public Integer getUserID() {
+            return userID;
+        }
+        public void setUserID(Integer userID) {
+            this.userID = userID;
+        }
+        public String getRFID() {
+            return rFID;
+        }
+        public void setRFID(String rFID) {
+            this.rFID = rFID;
+        }
+        public boolean getIsDeActive() {
+            return isDeActive;
+        }
+        public void setIsDeActive(boolean isDeActive) {
+            this.isDeActive = isDeActive;
+        }
+    }
 }
