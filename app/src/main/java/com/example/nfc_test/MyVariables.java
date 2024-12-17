@@ -69,7 +69,7 @@ public class MyVariables extends Application {
     static final String WEB_URL = "https://gps.da-is.org/4rschooltest/PostData.svc?wsdl";
 
     public static String deviceID = "";
-    public static boolean IsProduction = true;
+    public static boolean IsProduction = false;
 
     String KEY1 = "987654321987";
     String KEY2 = "543215432154";
@@ -388,6 +388,7 @@ public class MyVariables extends Application {
         SUCCESS_SCANNED_USERS_LIST,
         FAILED_SCANNED_USERS_LIST,
         ISDEFAULTMASTERCARDUSE,
+        USER_RFID,
     }
 
     public static Drawable getCaptchaImage() {

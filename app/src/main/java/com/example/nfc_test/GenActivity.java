@@ -1,6 +1,7 @@
 package com.example.nfc_test;
 
 
+import static com.example.nfc_test.MyVariables.SCHOOL_GROUP_CODE;
 import static com.example.nfc_test.Utility.getDateDiff;
 import static com.example.nfc_test.Utility.toDec;
 import static com.example.nfc_test.Utility.toHex;
@@ -34,6 +35,7 @@ import android.text.Editable;
 import android.text.Html;
 import android.text.TextWatcher;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -58,13 +60,13 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.android.volley.Request;
 import com.example.nfc_test.db.DatabaseHandler;
 import com.example.nfc_test.models.AttendanceModel;
+import com.example.nfc_test.models.ParentRFID;
 import com.example.nfc_test.models.ResponseModel;
 import com.example.nfc_test.models.ScannedUserDetailsResult;
 import com.example.nfc_test.models.UserAttendanceDataPushResult;
 import com.example.nfc_test.models.UserAttendanceExternalAPIVM;
 import com.example.nfc_test.models.UserAttendanceResponse;
 import com.example.nfc_test.models.UserDetailsResult;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -76,6 +78,10 @@ import com.google.android.gms.tasks.Task;
 import com.google.android.material.chip.ChipGroup;
 import com.google.gson.Gson;
 import com.opencsv.CSVWriter;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -140,13 +146,15 @@ public class GenActivity extends AppCompatActivity {
     ArrayList<AttendanceModel> getAttendanceLogList = new ArrayList<>();
     private static final int REQUEST_PERMISSION_CODE = 1;
     private static final int REQUEST_CODE_MANAGE_EXTERNAL_STORAGE = 101;
+    AlertDialog tapAlertDialog;
+    ;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_gen);
         db = new DatabaseHandler(GenActivity.this);
-
+        tapAlertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "");
 ////        db.deleteAttendanceAllRecords();
 //        Gson gson = new Gson();
 //        List<UserAttendanceExternalAPIVM> externalAPIVMList = new ArrayList<UserAttendanceExternalAPIVM>();
@@ -200,7 +208,7 @@ public class GenActivity extends AppCompatActivity {
                 ((TextView) findViewById(R.id.userName)).setText(displayText);
             }
 
-            SharedPreferences mSharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ISDEFAULTMASTERCARDUSE.toString(), Context.MODE_PRIVATE);
+            SharedPreferences mSharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ISDEFAULTMASTERCARDUSE.toString(), MODE_PRIVATE);
             String cardData = mSharedPreferences.getString(MyVariables.DEFAULT_ENUM.ISDEFAULTMASTERCARDUSE.toString(), "");
             //Log.v("cardddddd2222222222", cardData);
             if (!cardData.isEmpty()) {
@@ -217,7 +225,7 @@ public class GenActivity extends AppCompatActivity {
             } else {
                 reading_data.setText("Tap Master Card to Proceed for attendance");
             }
-
+            checkUserRFIDAvailable();
 
             if (!MyVariables.lstScannedUsers.isEmpty()) {
                 displayScannedDetails();
@@ -621,38 +629,46 @@ public class GenActivity extends AppCompatActivity {
             });
             alertDialog.show();
         } else if (itemId == R.id.download_attendance_report) {
-            if (!db.getAllAttendanceList().isEmpty()) {
-                // Check if permissions are already granted
-                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
-                    if (checkStoragePermission()) {
-                        // Permissions are already granted, perform your actions here
-                        exportToCSVFile();
+            try {
+                if (!db.getAllAttendanceList().isEmpty()) {
+                    // Check if permissions are already granted
+                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
+                        if (checkStoragePermission()) {
+                            // Permissions are already granted, perform your actions here
+                            exportToCSVFile();
+                        } else {
+                            // Request permissions
+                            requestReadWritePermissions();
+                        }
                     } else {
-                        // Request permissions
-                        requestReadWritePermissions();
+                        exportToCSVFile();
                     }
                 } else {
-                    exportToCSVFile();
+                    Toast.makeText(this, "Attendance report is empty", Toast.LENGTH_SHORT).show();
                 }
-            } else {
+            } catch (Exception e) {
                 Toast.makeText(this, "Attendance report is empty", Toast.LENGTH_SHORT).show();
             }
         } else if (itemId == R.id.menu_sync_data) {
-            boolean isErrorDataAvailable = false;
+            try {
+                boolean isErrorDataAvailable = false;
 
-            if (!db.getAllAttendanceList().isEmpty()) {
-                for (AttendanceModel attendance : db.getAllAttendanceList()) {
-                    if (!attendance.getStatus().isEmpty() && attendance.getStatus().contains("Error")) {
-                        isErrorDataAvailable = true;
-                        Log.e("attendance", attendance.getData());
+                if (!db.getAllAttendanceList().isEmpty()) {
+                    for (AttendanceModel attendance : db.getAllAttendanceList()) {
+                        if (!attendance.getStatus().isEmpty() && attendance.getStatus().contains("Error")) {
+                            isErrorDataAvailable = true;
+                            Log.e("attendance", attendance.getData());
+                        }
                     }
-                }
-                if (isErrorDataAvailable) {
-                    showAlert(this);
+                    if (isErrorDataAvailable) {
+                        showAlert(this);
+                    } else {
+                        Toast.makeText(GenActivity.this, "All Data Already Synced Successfully", Toast.LENGTH_LONG).show();
+                    }
                 } else {
-                    Toast.makeText(GenActivity.this, "All Data Already Synced Successfully", Toast.LENGTH_LONG).show();
+                    Toast.makeText(GenActivity.this, "No data available for manual sync", Toast.LENGTH_LONG).show();
                 }
-            } else {
+            } catch (Exception e) {
                 Toast.makeText(GenActivity.this, "No data available for manual sync", Toast.LENGTH_LONG).show();
             }
         }
@@ -1008,279 +1024,277 @@ public class GenActivity extends AppCompatActivity {
 
         /* access modifiers changed from: protected */
         public String doInBackground(Intent... params) {
+            if (SCHOOL_GROUP_CODE != null && SCHOOL_GROUP_CODE.contains("dais")) {
 
-            if (MyVariables.SECTOR_NUMBER != 0) {
-                //#region StudentCardRead
+                if (MyVariables.SECTOR_NUMBER != 0) {
+                    //#region StudentCardRead
 
-                byte[][] result = new byte[3][];
-                Intent intent = params[0];
-                if (!"android.nfc.action.TECH_DISCOVERED".equals(intent.getAction())) {
-                    if (!MyVariables.IsProduction) {
-                        Log.d("Error:", "CARD_ERROR");
+                    byte[][] result = new byte[3][];
+                    Intent intent = params[0];
+                    if (!"android.nfc.action.TECH_DISCOVERED".equals(intent.getAction())) {
+                        if (!MyVariables.IsProduction) {
+                            Log.d("Error:", "CARD_ERROR");
+                        }
+                        sb.append("Error: CARD_ERROR");
+                        return "CARD_ERROR";
                     }
-                    sb.append("Error: CARD_ERROR");
-                    return "CARD_ERROR";
-                }
-                MifareClassic mfc = MifareClassic.get((Tag) intent.getParcelableExtra("android.nfc.extra.TAG"));
-                try {
-                    mfc.connect();
-
-                    if (mfc.authenticateSectorWithKeyA(MyVariables.SECTOR_NUMBER, MyVariables.CARD_AUTH_KEY)) {
-                        byte[] data = mfc.readBlock(mfc.sectorToBlock(MyVariables.SECTOR_NUMBER));
-                        if (!MyVariables.IsProduction) {
-                            Log.v("Sector number", String.valueOf(MyVariables.SECTOR_NUMBER));
-                        }
-                        if (!MyVariables.IsProduction) {
-                            Log.v("card auth key", Arrays.toString(MyVariables.CARD_AUTH_KEY));
-                        }
-                        String hexData = Utility.toReversedHex(data);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("Rev. Hex Data", hexData);
-                        }
-                        //sb.append("Rev. Hex Data:\n" + hexData);
-
-                        String finalDataToProcess = hexData.substring(4, hexData.length() - 1).substring(0, 10);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("Final Hex Data", finalDataToProcess);
-                        }
-                        //sb.append("Final Hex Data: \n" + finalDataToProcess);
-
-                        String binaryData = Utility.hexToBinary(finalDataToProcess);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("To Binary", binaryData);
-                        }
-                        //sb.append("Final Hex Data: \n" + finalDataToProcess);
-
-                        String finalBinaryData = binaryData.substring(0, 37);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("Final Binary", finalBinaryData + " length: " + finalBinaryData.length());
-                        }
-                        //sb.append("Final Binary: \n" + finalDataToProcess);
-
-                        String ccode = finalBinaryData.substring(0, 12);
-                        String fCode = new StringBuilder().append(ccode).reverse().toString();
-                        int facilityCode = Integer.parseInt(fCode, 2);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("facilityCode", ccode + " length: " + ccode.length() + " - " + fCode + " - " + facilityCode);
-                        }
-                        sb.append("\nUser Card read successfully.\n");
-                        //sb.append("\nFacility Code: " + facilityCode);
-                        strFacCode = "" + facilityCode;
-
-                        String ccnumber = finalBinaryData.substring(13, 33);
-                        String cNumber = new StringBuilder().append(ccnumber).reverse().toString();
-                        int cardNumber = Integer.parseInt(cNumber, 2);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("cardNumber", ccnumber + " length: " + ccnumber.length() + " - " + cNumber + " - " + cardNumber);
-                        }
-                        //sb.append("\nCard Number: " + cardNumber);
-                        strCardNumber = "" + cardNumber;
-                        if (!MyVariables.IsProduction) {
-                            if (cardNumber == 1048572) {
-                                strName = "Ashish Sharma";
-                            } else if (cardNumber == 1047575) {
-                                strName = "Manish Sharma";
-                            } else if (cardNumber == 1048574) {
-                                strName = "Archana Sharma";
-                            } else if (cardNumber == 100002) {
-                                strEmpCode = "12345679";
-                                strName = "Testing Card";
-                            } else if (cardNumber == 100001) {
-                                strName = "Testing Card";
-                                strEmpCode = "12345678";
-                            }
-                            Log.v("strName", strName);
-                        }
-                        String aa = finalBinaryData.substring(34, 37);
-                        String iLevel = new StringBuilder().append(aa).reverse().toString();
-                        int issueLevel = Integer.parseInt(iLevel, 2);
-
-                        if (!MyVariables.IsProduction) {
-                            Log.v("issueLevel", aa + " - " + iLevel + " - " + issueLevel);
-                        }
-                        //sb.append("\nIssue Level: "  + issueLevel);
-                        strIssueLevel = "" + issueLevel;
-
-                        isStudent = true;
-                        mfc.close();
-                    } else {
-                        if (!MyVariables.IsProduction) {
-                            Log.v("AUTH", "Fail with Private Key");
-                        }
-
-                        sb.append("Authentication Failed with Private Key.\n");
-                    }
-                    mfc.close();
-
-                    return "ERROR";
-                } catch (Exception ex) {
-                    String str = "EXCEPTION: " + ex.toString();
-                    if (!MyVariables.IsProduction) {
-                        Log.d("Error:", str);
-                    }
-                    sb.append("Something went wrong, please try again.");
-                    if (!mfc.isConnected()) {
-                        return str;
-                    }
+                    MifareClassic mfc = MifareClassic.get((Tag) intent.getParcelableExtra("android.nfc.extra.TAG"));
                     try {
-                        mfc.close();
-                        return str;
-                    } catch (Exception e4) {
-                        return str;
-                    }
-                } catch (Throwable th) {
-                    if (mfc.isConnected()) {
-                        try {
-                            mfc.close();
-                        } catch (Exception e5) {
-                        }
-                    }
-                    throw th;
-                }
-                //#endregion StudentCardRead
-            } else {
-                //#region MasterCardRead
+                        mfc.connect();
 
-                byte[][] result = new byte[3][];
-                Intent intent = params[0];
-
-                if (!"android.nfc.action.TECH_DISCOVERED".equals(intent.getAction())) {
-
-                    if (!MyVariables.IsProduction) {
-                        Log.d("Error:", "CARD_ERROR");
-                    }
-                    sb.append("Error: CARD_ERROR");
-                    return "CARD_ERROR";
-                }
-                MifareClassic mfc = MifareClassic.get((Tag) intent.getParcelableExtra("android.nfc.extra.TAG"));
-                try {
-                    mfc.connect();
-                    for (int k = 0; k < 16; k++) {
-                        boolean isAuthenticate = false;
-
-                        if (mfc.authenticateSectorWithKeyA(k, MifareClassic.KEY_DEFAULT)) {
-                            isAuthenticate = true;
+                        if (mfc.authenticateSectorWithKeyA(MyVariables.SECTOR_NUMBER, MyVariables.CARD_AUTH_KEY)) {
+                            byte[] data = mfc.readBlock(mfc.sectorToBlock(MyVariables.SECTOR_NUMBER));
                             if (!MyVariables.IsProduction) {
-                                Log.d("Auth-A:", "KEY_DEFAULT");
-                                sb.append("AuthenticateSectorWithKey - A: KEY_DEFAULT");
+                                Log.v("Sector number", String.valueOf(MyVariables.SECTOR_NUMBER));
                             }
-                        }
+                            if (!MyVariables.IsProduction) {
+                                Log.v("card auth key", Arrays.toString(MyVariables.CARD_AUTH_KEY));
+                            }
+                            String hexData = Utility.toReversedHex(data);
+                            if (!MyVariables.IsProduction) {
+                                Log.v("Rev. Hex Data", hexData);
+                            }
+                            //sb.append("Rev. Hex Data:\n" + hexData);
 
-                        if (isAuthenticate) {
-                            if (k == 2) {
-                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
-                                result[0] = data;
-                                if (!MyVariables.IsProduction) {
-                                    Log.v("Sector:", "S-" + k + " Data:" + Utility.toHex(data));
-                                }
-                            } else if (k == 5) {
-                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
-                                result[1] = data;
-                                if (!MyVariables.IsProduction) {
-                                    Log.v("Sector:", "S-" + k + " Data:" + Utility.toHex(data));
-                                }
-                            } else if (k == 8) {
-                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
-                                result[2] = data;
-                                if (!MyVariables.IsProduction) {
-                                    Log.v("Sector:", "S-" + k + " Data:" + Utility.toHex(data));
-                                }
+                            String finalDataToProcess = hexData.substring(4, hexData.length() - 1).substring(0, 10);
+                            if (!MyVariables.IsProduction) {
+                                Log.v("Final Hex Data", finalDataToProcess);
                             }
-                        }
-                    }
-                    if (result[0] == null || result[1] == null || result[2] == null) {
-                        if (mfc.isConnected()) {
-                            try {
-                                mfc.close();
-                            } catch (Exception e) {
-                            }
-                        }
-                        if (!MyVariables.IsProduction) {
-                            Log.d("Error:", "MASTER_CARD_ERROR");
-                        }
-                        sb.append("Error - MASTER_CARD_ERROR");
-                        return "MASTER_CARD_ERROR";
-                    }
-                    byte[] bt = Utility.calculateResult(result);
-                    byte[] result1 = new byte[8];
-                    byte[] result2 = new byte[8];
-                    System.arraycopy(bt, 0, result1, 0, 8);
-                    System.arraycopy(bt, 8, result2, 0, 8);
-                    if (Arrays.equals(result1, result2)) {
-                        byte[] key = new byte[6];
-                        System.arraycopy(result1, 0, key, 0, 6);
-                        System.arraycopy(result1, 0, MyVariables.CARD_AUTH_KEY, 0, 6);
+                            //sb.append("Final Hex Data: \n" + finalDataToProcess);
 
-                        MyVariables.SECTOR_NUMBER = result1[6];
-                        if (mfc.isConnected()) {
-                            try {
-                                mfc.close();
-                            } catch (Exception e2) {
+                            String binaryData = Utility.hexToBinary(finalDataToProcess);
+                            if (!MyVariables.IsProduction) {
+                                Log.v("To Binary", binaryData);
                             }
-                        }
-                        if (!MyVariables.IsProduction) {
-                            Log.d("SUCCESS:", "SUCCESS");
-                            //reading_data.setText("Master Card read successfully.");
-                            Log.d("Data1:", Utility.toHex(result[0]));
-                            Log.d("Data2:", Utility.toHex(result[1]));
-                            Log.d("Data3:", Utility.toHex(result[2]));
-                            Log.d("Final:", Utility.toHex(bt));
+                            //sb.append("Final Hex Data: \n" + finalDataToProcess);
 
-                            Log.d("Result1:", Utility.toHex(result1) + " - " + Utility.toDec(result1) + " - " + Utility.toReversedDec(result1) + " - " + new String(result1).trim());
-                            Log.d("Result2:", Utility.toHex(result2) + " - " + Utility.toDec(result2) + " - " + Utility.toReversedDec(result2) + " - " + new String(result2).trim());
-                            Log.d("KEY:", Utility.toReversedHex(MyVariables.CARD_AUTH_KEY));
-                            Log.d("SECTOR", "" + MyVariables.SECTOR_NUMBER);
-                        }
-                        if (Utility.toDec(MyVariables.CARD_AUTH_KEY) == 0) {
-                            sb.append("This is not Master Card. Please tap/scan Master Card");
-                            MyVariables.SECTOR_NUMBER = 0;
-                            MyVariables.CARD_AUTH_KEY = new byte[6];
+                            String finalBinaryData = binaryData.substring(0, 37);
+                            if (!MyVariables.IsProduction) {
+                                Log.v("Final Binary", finalBinaryData + " length: " + finalBinaryData.length());
+                            }
+                            //sb.append("Final Binary: \n" + finalDataToProcess);
+
+                            String ccode = finalBinaryData.substring(0, 12);
+                            String fCode = new StringBuilder().append(ccode).reverse().toString();
+                            int facilityCode = Integer.parseInt(fCode, 2);
+                            if (!MyVariables.IsProduction) {
+                                Log.v("facilityCode", ccode + " length: " + ccode.length() + " - " + fCode + " - " + facilityCode);
+                            }
+                            sb.append("\nUser Card read successfully.\n");
+                            //sb.append("\nFacility Code: " + facilityCode);
+                            strFacCode = "" + facilityCode;
+
+                            String ccnumber = finalBinaryData.substring(13, 33);
+                            String cNumber = new StringBuilder().append(ccnumber).reverse().toString();
+                            int cardNumber = Integer.parseInt(cNumber, 2);
+                            if (!MyVariables.IsProduction) {
+                                Log.v("cardNumber", ccnumber + " length: " + ccnumber.length() + " - " + cNumber + " - " + cardNumber);
+                            }
+                            //sb.append("\nCard Number: " + cardNumber);
+                            strCardNumber = "" + cardNumber;
+                            if (!MyVariables.IsProduction) {
+                                if (cardNumber == 1048572) {
+                                    strName = "Ashish Sharma";
+                                } else if (cardNumber == 1047575) {
+                                    strName = "Manish Sharma";
+                                } else if (cardNumber == 1048574) {
+                                    strName = "Archana Sharma";
+                                } else if (cardNumber == 100002) {
+                                    strEmpCode = "12345679";
+                                    strName = "Testing Card";
+                                } else if (cardNumber == 100001) {
+                                    strName = "Testing Card";
+                                    strEmpCode = "12345678";
+                                }
+                                Log.v("strName", strName);
+                            }
+                            String aa = finalBinaryData.substring(34, 37);
+                            String iLevel = new StringBuilder().append(aa).reverse().toString();
+                            int issueLevel = Integer.parseInt(iLevel, 2);
+
+                            if (!MyVariables.IsProduction) {
+                                Log.v("issueLevel", aa + " - " + iLevel + " - " + issueLevel);
+                            }
+                            //sb.append("\nIssue Level: "  + issueLevel);
+                            strIssueLevel = "" + issueLevel;
+
+                            isStudent = true;
+                            mfc.close();
                         } else {
-                            sb.append("Master Card read successfully. Now You Can Scan/Tap User Card");
-                        }
+                            if (!MyVariables.IsProduction) {
+                                Log.v("AUTH", "Fail with Private Key");
+                            }
 
-                        flag = true;
-                        return "SUCCESS";
-                    }
-                    if (mfc.isConnected()) {
-                        try {
-                            mfc.close();
-                        } catch (Exception e3) {
+                            sb.append("Authentication Failed with Private Key.\n");
                         }
-                    }
-                    Log.d("Error:", "ERROR");
-                    sb.append("Error: ERROR");
-                    return "ERROR";
-                } catch (Exception ex) {
-                    String str = "EXCEPTION: " + ex.toString();
-                    sb.append("Error: " + str);
-                    Log.d("Error:", str);
-                    if (!mfc.isConnected()) {
-                        return str;
-                    }
-                    try {
                         mfc.close();
-                        return str;
-                    } catch (Exception e4) {
-                        return str;
-                    }
-                } catch (Throwable th) {
-                    if (mfc.isConnected()) {
+
+                        return "ERROR";
+                    } catch (Exception ex) {
+                        String str = "EXCEPTION: " + ex.toString();
+                        if (!MyVariables.IsProduction) {
+                            Log.d("Error:", str);
+                        }
+                        sb.append("Something went wrong, please try again.");
+                        if (!mfc.isConnected()) {
+                            return str;
+                        }
                         try {
                             mfc.close();
-                        } catch (Exception e5) {
+                            return str;
+                        } catch (Exception e4) {
+                            return str;
                         }
+                    } catch (Throwable th) {
+                        if (mfc.isConnected()) {
+                            try {
+                                mfc.close();
+                            } catch (Exception e5) {
+                            }
+                        }
+                        throw th;
                     }
-                    throw th;
-                }
-                //#endregion MasterCardRead
-            }
+                    //#endregion StudentCardRead
+                } else {
+                    //#region MasterCardRead
 
-//            if (SCHOOL_GROUP_CODE != null && SCHOOL_GROUP_CODE.contains("dais")) {
-//                return daisDoInBackground(params);
-//            } else {
-//                return otherDoInBackground(params);
-//            }
+                    byte[][] result = new byte[3][];
+                    Intent intent = params[0];
+
+                    if (!"android.nfc.action.TECH_DISCOVERED".equals(intent.getAction())) {
+
+                        if (!MyVariables.IsProduction) {
+                            Log.d("Error:", "CARD_ERROR");
+                        }
+                        sb.append("Error: CARD_ERROR");
+                        return "CARD_ERROR";
+                    }
+                    MifareClassic mfc = MifareClassic.get((Tag) intent.getParcelableExtra("android.nfc.extra.TAG"));
+                    try {
+                        mfc.connect();
+                        for (int k = 0; k < 16; k++) {
+                            boolean isAuthenticate = false;
+
+                            if (mfc.authenticateSectorWithKeyA(k, MifareClassic.KEY_DEFAULT)) {
+                                isAuthenticate = true;
+                                if (!MyVariables.IsProduction) {
+                                    Log.d("Auth-A:", "KEY_DEFAULT");
+                                    sb.append("AuthenticateSectorWithKey - A: KEY_DEFAULT");
+                                }
+                            }
+
+                            if (isAuthenticate) {
+                                if (k == 2) {
+                                    byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
+                                    result[0] = data;
+                                    if (!MyVariables.IsProduction) {
+                                        Log.v("Sector:", "S-" + k + " Data:" + Utility.toHex(data));
+                                    }
+                                } else if (k == 5) {
+                                    byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
+                                    result[1] = data;
+                                    if (!MyVariables.IsProduction) {
+                                        Log.v("Sector:", "S-" + k + " Data:" + Utility.toHex(data));
+                                    }
+                                } else if (k == 8) {
+                                    byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
+                                    result[2] = data;
+                                    if (!MyVariables.IsProduction) {
+                                        Log.v("Sector:", "S-" + k + " Data:" + Utility.toHex(data));
+                                    }
+                                }
+                            }
+                        }
+                        if (result[0] == null || result[1] == null || result[2] == null) {
+                            if (mfc.isConnected()) {
+                                try {
+                                    mfc.close();
+                                } catch (Exception e) {
+                                }
+                            }
+                            if (!MyVariables.IsProduction) {
+                                Log.d("Error:", "MASTER_CARD_ERROR");
+                            }
+                            sb.append("Error - MASTER_CARD_ERROR");
+                            return "MASTER_CARD_ERROR";
+                        }
+                        byte[] bt = Utility.calculateResult(result);
+                        byte[] result1 = new byte[8];
+                        byte[] result2 = new byte[8];
+                        System.arraycopy(bt, 0, result1, 0, 8);
+                        System.arraycopy(bt, 8, result2, 0, 8);
+                        if (Arrays.equals(result1, result2)) {
+                            byte[] key = new byte[6];
+                            System.arraycopy(result1, 0, key, 0, 6);
+                            System.arraycopy(result1, 0, MyVariables.CARD_AUTH_KEY, 0, 6);
+
+                            MyVariables.SECTOR_NUMBER = result1[6];
+                            if (mfc.isConnected()) {
+                                try {
+                                    mfc.close();
+                                } catch (Exception e2) {
+                                }
+                            }
+                            if (!MyVariables.IsProduction) {
+                                Log.d("SUCCESS:", "SUCCESS");
+                                //reading_data.setText("Master Card read successfully.");
+                                Log.d("Data1:", Utility.toHex(result[0]));
+                                Log.d("Data2:", Utility.toHex(result[1]));
+                                Log.d("Data3:", Utility.toHex(result[2]));
+                                Log.d("Final:", Utility.toHex(bt));
+
+                                Log.d("Result1:", Utility.toHex(result1) + " - " + Utility.toDec(result1) + " - " + Utility.toReversedDec(result1) + " - " + new String(result1).trim());
+                                Log.d("Result2:", Utility.toHex(result2) + " - " + Utility.toDec(result2) + " - " + Utility.toReversedDec(result2) + " - " + new String(result2).trim());
+                                Log.d("KEY:", Utility.toReversedHex(MyVariables.CARD_AUTH_KEY));
+                                Log.d("SECTOR", "" + MyVariables.SECTOR_NUMBER);
+                            }
+                            if (Utility.toDec(MyVariables.CARD_AUTH_KEY) == 0) {
+                                sb.append("This is not Master Card. Please tap/scan Master Card");
+                                MyVariables.SECTOR_NUMBER = 0;
+                                MyVariables.CARD_AUTH_KEY = new byte[6];
+                            } else {
+                                sb.append("Master Card read successfully. Now You Can Scan/Tap User Card");
+                            }
+
+                            flag = true;
+                            return "SUCCESS";
+                        }
+                        if (mfc.isConnected()) {
+                            try {
+                                mfc.close();
+                            } catch (Exception e3) {
+                            }
+                        }
+                        Log.d("Error:", "ERROR");
+                        sb.append("Error: ERROR");
+                        return "ERROR";
+                    } catch (Exception ex) {
+                        String str = "EXCEPTION: " + ex.toString();
+                        sb.append("Error: " + str);
+                        Log.d("Error:", str);
+                        if (!mfc.isConnected()) {
+                            return str;
+                        }
+                        try {
+                            mfc.close();
+                            return str;
+                        } catch (Exception e4) {
+                            return str;
+                        }
+                    } catch (Throwable th) {
+                        if (mfc.isConnected()) {
+                            try {
+                                mfc.close();
+                            } catch (Exception e5) {
+                            }
+                        }
+                        throw th;
+                    }
+                    //#endregion MasterCardRead
+                }
+            } else {
+                return otherDoInBackground(params);
+            }
         }
 
         /* access modifiers changed from: protected */
@@ -1313,7 +1327,7 @@ public class GenActivity extends AppCompatActivity {
                 //}
             } else {
                 if (MyVariables.SECTOR_NUMBER != 0) {
-                    SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.MASTER_CARD_DATA.toString(), Context.MODE_PRIVATE);
+                    SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.MASTER_CARD_DATA.toString(), MODE_PRIVATE);
                     SharedPreferences.Editor myEdit = sharedPreferences.edit();
                     myEdit.putString(MyVariables.DEFAULT_ENUM.CARD_AUTH_KEY.toString(), toReversedHex(MyVariables.CARD_AUTH_KEY));
                     myEdit.putString(MyVariables.DEFAULT_ENUM.SECTOR_NUMBER.toString(), "" + MyVariables.SECTOR_NUMBER);
@@ -1322,309 +1336,72 @@ public class GenActivity extends AppCompatActivity {
             }
         }
 
-
-        String daisDoInBackground(Intent... params) {
-            if (MyVariables.SECTOR_NUMBER != 0) {
-                //#region StudentCardRead
-
-                byte[][] result = new byte[3][];
-                Intent intent = params[0];
-                if (!NfcAdapter.ACTION_TECH_DISCOVERED.equals(intent.getAction())) {
-                    if (!MyVariables.IsProduction) {
-                        Log.d("Error:", "CARD_ERROR");
-                    }
-                    sb.append("Error: CARD_ERROR");
-                    return "CARD_ERROR";
-                }
-
-                MifareClassic mfc = MifareClassic.get((Tag) intent.getParcelableExtra(NfcAdapter.EXTRA_TAG));
-                try {
-                    mfc.connect();
-
-                    if (mfc.authenticateSectorWithKeyA(MyVariables.SECTOR_NUMBER, MyVariables.CARD_AUTH_KEY)) {
-                        byte[] data = mfc.readBlock(mfc.sectorToBlock(MyVariables.SECTOR_NUMBER));
-
-                        String hexData = toReversedHex(data);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("Rev. Hex Data", hexData);
-                        }
-                        //sb.append("Rev. Hex Data:\n" + hexData);
-
-                        String finalDataToProcess = hexData.substring(4, hexData.length() - 1).substring(0, 10);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("Final Hex Data", finalDataToProcess);
-                        }
-                        //sb.append("Final Hex Data: \n" + finalDataToProcess);
-
-                        String binaryData = Utility.hexToBinary(finalDataToProcess);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("To Binary", binaryData);
-                        }
-                        //sb.append("Final Hex Data: \n" + finalDataToProcess);
-
-                        String finalBinaryData = binaryData.substring(0, 37);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("Final Binary", finalBinaryData + " length: " + finalBinaryData.length());
-                        }
-                        //sb.append("Final Binary: \n" + finalDataToProcess);
-
-                        String ccode = finalBinaryData.substring(0, 12);
-                        String fCode = new StringBuilder().append(ccode).reverse().toString();
-                        int facilityCode = Integer.parseInt(fCode, 2);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("facilityCode", ccode + " length: " + ccode.length() + " - " + fCode + " - " + facilityCode);
-                        }
-                        sb.append("\nUser Card read successfully.\n");
-                        //sb.append("\nFacility Code: " + facilityCode);
-                        strFacCode = "" + facilityCode;
-
-                        String ccnumber = finalBinaryData.substring(13, 33);
-                        String cNumber = new StringBuilder().append(ccnumber).reverse().toString();
-                        int cardNumber = Integer.parseInt(cNumber, 2);
-                        if (!MyVariables.IsProduction) {
-                            Log.v("cardNumber", ccnumber + " length: " + ccnumber.length() + " - " + cNumber + " - " + cardNumber);
-                        }
-                        //sb.append("\nCard Number: " + cardNumber);
-                        strCardNumber = "" + cardNumber;
-                        if (!MyVariables.IsProduction) {
-                            if (cardNumber == 1048572) {
-                                strName = "Ashish Sharma";
-                            } else if (cardNumber == 1047575) {
-                                strName = "Manish Sharma";
-                            } else if (cardNumber == 1048574) {
-                                strName = "Archana Sharma";
-                            } else if (cardNumber == 100002) {
-                                strEmpCode = "12345679";
-                                strName = "Testing Card";
-                            } else if (cardNumber == 100001) {
-                                strName = "Testing Card";
-                                strEmpCode = "12345678";
-                            }
-                            Log.v("strName", strName);
-                        }
-                        String aa = finalBinaryData.substring(34, 37);
-                        String iLevel = new StringBuilder().append(aa).reverse().toString();
-                        int issueLevel = Integer.parseInt(iLevel, 2);
-
-                        if (!MyVariables.IsProduction) {
-                            Log.v("issueLevel", aa + " - " + iLevel + " - " + issueLevel);
-                        }
-                        //sb.append("\nIssue Level: "  + issueLevel);
-                        strIssueLevel = "" + issueLevel;
-
-                        isStudent = true;
-                        mfc.close();
-                    } else {
-                        if (!MyVariables.IsProduction) {
-                            Log.v("AUTH", "Fail with Private Key");
-                        }
-
-                        sb.append("Authentication Failed with Private Key.\n");
-                    }
-                    mfc.close();
-
-                    return "ERROR";
-                } catch (Exception ex) {
-                    String str = "EXCEPTION: " + ex.toString();
-                    if (!MyVariables.IsProduction) {
-                        Log.d("Error:", str);
-                    }
-                    sb.append("Something went wrong, please try again.");
-                    if (!mfc.isConnected()) {
-                        return str;
-                    }
-                    try {
-                        mfc.close();
-                        return str;
-                    } catch (Exception e4) {
-                        return str;
-                    }
-                } catch (Throwable th) {
-                    if (mfc.isConnected()) {
-                        try {
-                            mfc.close();
-                        } catch (Exception e5) {
-                        }
-                    }
-                    throw th;
-                }
-                //#endregion StudentCardRead
-            } else {
-                //#region MasterCardRead
-
-                byte[][] result = new byte[3][];
-                Intent intent = params[0];
-
-                if (!"android.nfc.action.TECH_DISCOVERED".equals(intent.getAction())) {
-
-                    if (!MyVariables.IsProduction) {
-                        Log.d("Error:", "CARD_ERROR");
-                    }
-                    sb.append("Error: CARD_ERROR");
-                    return "CARD_ERROR";
-                }
-                MifareClassic mfc = MifareClassic.get((Tag) intent.getParcelableExtra(NfcAdapter.EXTRA_TAG));
-                try {
-                    mfc.connect();
-                    for (int k = 0; k < 16; k++) {
-                        boolean isAuthenticate = false;
-
-                        if (mfc.authenticateSectorWithKeyA(k, MifareClassic.KEY_DEFAULT)) {
-                            isAuthenticate = true;
-                            if (!MyVariables.IsProduction) {
-                                Log.d("Auth-A:", "KEY_DEFAULT");
-                                sb.append("AuthenticateSectorWithKey - A: KEY_DEFAULT");
-                            }
-                        }
-
-                        if (isAuthenticate) {
-                            if (k == 2) {
-                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
-                                result[0] = data;
-                                if (!MyVariables.IsProduction) {
-                                    Log.v("Sector:", "S-" + k + " Data:" + toHex(data));
-                                }
-                            } else if (k == 5) {
-                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
-                                result[1] = data;
-                                if (!MyVariables.IsProduction) {
-                                    Log.v("Sector:", "S-" + k + " Data:" + toHex(data));
-                                }
-                            } else if (k == 8) {
-                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
-                                result[2] = data;
-                                if (!MyVariables.IsProduction) {
-                                    Log.v("Sector:", "S-" + k + " Data:" + toHex(data));
-                                }
-                            }
-                        }
-                    }
-                    if (result[0] == null || result[1] == null || result[2] == null) {
-                        if (mfc.isConnected()) {
-                            try {
-                                mfc.close();
-                            } catch (Exception e) {
-                            }
-                        }
-                        if (!MyVariables.IsProduction) {
-                            Log.d("Error:", "MASTER_CARD_ERROR");
-                        }
-                        sb.append("Error - MASTER_CARD_ERROR");
-                        return "MASTER_CARD_ERROR";
-                    }
-                    byte[] bt = Utility.calculateResult(result);
-                    byte[] result1 = new byte[8];
-                    byte[] result2 = new byte[8];
-                    System.arraycopy(bt, 0, result1, 0, 8);
-                    System.arraycopy(bt, 8, result2, 0, 8);
-                    if (Arrays.equals(result1, result2)) {
-                        byte[] key = new byte[6];
-                        System.arraycopy(result1, 0, key, 0, 6);
-                        System.arraycopy(result1, 0, MyVariables.CARD_AUTH_KEY, 0, 6);
-
-                        MyVariables.SECTOR_NUMBER = result1[6];
-                        if (mfc.isConnected()) {
-                            try {
-                                mfc.close();
-                            } catch (Exception e2) {
-                            }
-                        }
-                        if (!MyVariables.IsProduction) {
-                            Log.d("SUCCESS:", "SUCCESS");
-                            //reading_data.setText("Master Card read successfully.");
-                            Log.d("Data1:", toHex(result[0]));
-                            Log.d("Data2:", toHex(result[1]));
-                            Log.d("Data3:", toHex(result[2]));
-                            Log.d("Final:", toHex(bt));
-
-                            Log.d("Result1:", toHex(result1) + " - " + toDec(result1) + " - " + toReversedDec(result1) + " - " + new String(result1).trim());
-                            Log.d("Result2:", toHex(result2) + " - " + toDec(result2) + " - " + toReversedDec(result2) + " - " + new String(result2).trim());
-                            Log.d("KEY:", toReversedHex(MyVariables.CARD_AUTH_KEY));
-                            Log.d("SECTOR", "" + MyVariables.SECTOR_NUMBER);
-                        }
-                        if (toDec(MyVariables.CARD_AUTH_KEY) == 0) {
-                            sb.append("This is not Master Card. Please tap/scan Master Card");
-                            MyVariables.SECTOR_NUMBER = 0;
-                            MyVariables.CARD_AUTH_KEY = new byte[6];
-                        } else {
-                            sb.append("Master Card read successfully. Now You Can Scan/Tap User Card");
-                        }
-
-                        flag = true;
-                        return "SUCCESS";
-                    }
-                    if (mfc.isConnected()) {
-                        try {
-                            mfc.close();
-                        } catch (Exception e3) {
-                        }
-                    }
-                    Log.d("Error:", "ERROR");
-                    sb.append("Error: ERROR");
-                    return "ERROR";
-                } catch (Exception ex) {
-                    String str = "EXCEPTION: " + ex.toString();
-                    sb.append("Error: " + str);
-                    Log.d("Error:", str);
-                    if (!mfc.isConnected()) {
-                        return str;
-                    }
-                    try {
-                        mfc.close();
-                        return str;
-                    } catch (Exception e4) {
-                        return str;
-                    }
-                } catch (Throwable th) {
-                    if (mfc.isConnected()) {
-                        try {
-                            mfc.close();
-                        } catch (Exception e5) {
-                        }
-                    }
-                    throw th;
-                }
-                //#endregion MasterCardRead
-            }
-        }
-
         String otherDoInBackground(Intent... params) {
-            if (MyVariables.SECTOR_NUMBER != 0) {
 
-                //#region StudentCardRead
+            try {
+                if (MyVariables.SECTOR_NUMBER != 0) {
 
-                byte[][] result = new byte[3][];
-                Intent intent = params[0];
+                    //#region StudentCardRead
+
+                    byte[][] result = new byte[3][];
+                    Intent intent = params[0];
 
 
-                String action = intent.getAction();
-                if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)
-                        || NfcAdapter.ACTION_TECH_DISCOVERED.equals(action)
-                        || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
-                    Tag tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
-                    String payload = detectTagData(tag);
+                    String action = intent.getAction();
+                    if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)
+                            || NfcAdapter.ACTION_TECH_DISCOVERED.equals(action)
+                            || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
+                        Tag tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+                        String payload = detectTagData(tag);
+
+                        if (!MyVariables.IsProduction) {
+                            Log.e("Payload: ", payload);
+                        }
+                        String newStrCardNumber = String.valueOf(toDec(tag.getId()));
+                        if (!MyVariables.IsProduction) {
+                            Log.e("finalStrcardnumber: ", newStrCardNumber);
+                        }
+                        if (!finaluserDetailsResults.isEmpty()) {
+                            if (finaluserDetailsResults.get(0).getParentRFIDCheckRequired()) {
+                                SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), MODE_PRIVATE);
+                                String getStudentRFID = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), "");
+                                if (getStudentRFID.isEmpty()) {
+                                    UserDetailsResult detailsResult = findUserFromList(newStrCardNumber);
+                                    if (!detailsResult.getRFIDNumbers().isEmpty()) {
+                                        SharedPreferences.Editor myEdit = sharedPreferences.edit();
+                                        myEdit.putString(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), newStrCardNumber);
+                                        myEdit.apply();
+                                        showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
+                                    } else {
+                                        Toast.makeText(GenActivity.this, "Please use Valid Card for Attendance", Toast.LENGTH_SHORT).show();
+                                    }
+                                } else {
+                                    otherCardTapMethod(getStudentRFID, newStrCardNumber);
+                                }
+                            } else {
+                                strCardNumber = newStrCardNumber;
+                                callAttendancePushCallApi();
+                            }
+                        }
+
 
 //                    StringBuilder sb = new StringBuilder();
-                    byte[] id = tag.getId();
+//                    byte[] id = tag.getId();
 
 //                    sb.append("ID (reversed hex): ").append(toReversedHex(id)).append('\n');
 
-                    strCardNumber = toReversedHex(id);
-                    Log.e("Payload: ", payload);
-
-                    return strCardNumber;
-
-                    //readData(tag);
-                }
-
-
-                if (!NfcAdapter.ACTION_TECH_DISCOVERED.equals(intent.getAction())) {
-                    if (!MyVariables.IsProduction) {
-                        Log.d("Error:", "CARD_ERROR");
+//                    strCardNumber = toReversedHex(id);
+                        //readData(tag);
                     }
-                    sb.append("Error: CARD_ERROR");
-                    return "CARD_ERROR";
-                }
+
+
+                    if (!NfcAdapter.ACTION_TECH_DISCOVERED.equals(intent.getAction())) {
+                        if (!MyVariables.IsProduction) {
+                            Log.d("Error:", "CARD_ERROR");
+                        }
+                        sb.append("Error: CARD_ERROR");
+                        return "CARD_ERROR";
+                    }
 
 //                MifareClassic mfc = MifareClassic.get((Tag) intent.getParcelableExtra(NfcAdapter.EXTRA_TAG));
 //                try {
@@ -1737,145 +1514,522 @@ public class GenActivity extends AppCompatActivity {
 //                    }
 //                    throw th;
 //                }
-                //#endregion StudentCardRead
-            } else {
-                //#region MasterCardRead
-
-                byte[][] result = new byte[3][];
-                Intent intent = params[0];
-
-                if (!"android.nfc.action.TECH_DISCOVERED".equals(intent.getAction())) {
-
-                    if (!MyVariables.IsProduction) {
-                        Log.d("Error:", "CARD_ERROR");
-                    }
-                    sb.append("Error: CARD_ERROR");
-                    return "CARD_ERROR";
+                    //#endregion StudentCardRead
+                } else {
+                    //#region MasterCardRead
+//                byte[][] result = new byte[3][];
+//                Intent intent = params[0];
+//
+//                if (!"android.nfc.action.TECH_DISCOVERED".equals(intent.getAction())) {
+//
+//                    if (!MyVariables.IsProduction) {
+//                        Log.d("Error:", "CARD_ERROR");
+//                    }
+//                    sb.append("Error: CARD_ERROR");
+//                    return "CARD_ERROR";
+//                }
+//                MifareClassic mfc = MifareClassic.get((Tag) intent.getParcelableExtra(NfcAdapter.EXTRA_TAG));
+//                try {
+//                    mfc.connect();
+//                    for (int k = 0; k < 16; k++) {
+//                        boolean isAuthenticate = false;
+//
+//                        if (mfc.authenticateSectorWithKeyA(k, MifareClassic.KEY_DEFAULT)) {
+//                            isAuthenticate = true;
+//                            if (!MyVariables.IsProduction) {
+//                                Log.d("Auth-A:", "KEY_DEFAULT");
+//                                sb.append("AuthenticateSectorWithKey - A: KEY_DEFAULT");
+//                            }
+//                        }
+//
+//                        if (isAuthenticate) {
+//                            if (k == 2) {
+//                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
+//                                result[0] = data;
+//                                if (!MyVariables.IsProduction) {
+//                                    Log.v("Sector:", "S-" + k + " Data:" + toHex(data));
+//                                }
+//                            } else if (k == 5) {
+//                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
+//                                result[1] = data;
+//                                if (!MyVariables.IsProduction) {
+//                                    Log.v("Sector:", "S-" + k + " Data:" + toHex(data));
+//                                }
+//                            } else if (k == 8) {
+//                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
+//                                result[2] = data;
+//                                if (!MyVariables.IsProduction) {
+//                                    Log.v("Sector:", "S-" + k + " Data:" + toHex(data));
+//                                }
+//                            }
+//                        }
+//                    }
+//                    if (result[0] == null || result[1] == null || result[2] == null) {
+//                        if (mfc.isConnected()) {
+//                            try {
+//                                mfc.close();
+//                            } catch (Exception e) {
+//                            }
+//                        }
+//                        if (!MyVariables.IsProduction) {
+//                            Log.d("Error:", "MASTER_CARD_ERROR");
+//                        }
+//                        sb.append("Error - MASTER_CARD_ERROR");
+//                        return "MASTER_CARD_ERROR";
+//                    }
+//                    byte[] bt = Utility.calculateResult(result);
+//                    byte[] result1 = new byte[8];
+//                    byte[] result2 = new byte[8];
+//                    System.arraycopy(bt, 0, result1, 0, 8);
+//                    System.arraycopy(bt, 8, result2, 0, 8);
+//                    if (Arrays.equals(result1, result2)) {
+//                        byte[] key = new byte[6];
+//                        System.arraycopy(result1, 0, key, 0, 6);
+//                        System.arraycopy(result1, 0, MyVariables.CARD_AUTH_KEY, 0, 6);
+//
+//                        MyVariables.SECTOR_NUMBER = result1[6];
+//                        if (mfc.isConnected()) {
+//                            try {
+//                                mfc.close();
+//                            } catch (Exception e2) {
+//                            }
+//                        }
+//                        if (!MyVariables.IsProduction) {
+//                            Log.d("SUCCESS:", "SUCCESS");
+//                            //reading_data.setText("Master Card read successfully.");
+//                            Log.d("Data1:", toHex(result[0]));
+//                            Log.d("Data2:", toHex(result[1]));
+//                            Log.d("Data3:", toHex(result[2]));
+//                            Log.d("Final:", toHex(bt));
+//
+//                            Log.d("Result1:", toHex(result1) + " - " + toDec(result1) + " - " + toReversedDec(result1) + " - " + new String(result1).trim());
+//                            Log.d("Result2:", toHex(result2) + " - " + toDec(result2) + " - " + toReversedDec(result2) + " - " + new String(result2).trim());
+//                            Log.d("KEY:", toReversedHex(MyVariables.CARD_AUTH_KEY));
+//                            Log.d("SECTOR", "" + MyVariables.SECTOR_NUMBER);
+//                        }
+//                        if (toDec(MyVariables.CARD_AUTH_KEY) == 0) {
+//                            sb.append("This is not Master Card. Please tap/scan Master Card");
+//                            MyVariables.SECTOR_NUMBER = 0;
+//                            MyVariables.CARD_AUTH_KEY = new byte[6];
+//                        } else {
+//                            sb.append("Master Card read successfully. Now You Can Scan/Tap User Card");
+//                        }
+//
+//                        flag = true;
+//                        return "SUCCESS";
+//                    }
+//                    if (mfc.isConnected()) {
+//                        try {
+//                            mfc.close();
+//                        } catch (Exception e3) {
+//                        }
+//                    }
+//                    Log.d("Error:", "ERROR");
+//                    sb.append("Error: ERROR");
+//                    return "ERROR";
+//                } catch (Exception ex) {
+//                    String str = "EXCEPTION: " + ex.toString();
+//                    sb.append("Error: " + str);
+//                    Log.d("Error:", str);
+//                    if (!mfc.isConnected()) {
+//                        return str;
+//                    }
+//                    try {
+//                        mfc.close();
+//                        return str;
+//                    } catch (Exception e4) {
+//                        return str;
+//                    }
+//                } catch (Throwable th) {
+//                    if (mfc.isConnected()) {
+//                        try {
+//                            mfc.close();
+//                        } catch (Exception e5) {
+//                        }
+//                    }
+//                    throw th;
+//                }
+                    //#endregion MasterCardRead
                 }
-                MifareClassic mfc = MifareClassic.get((Tag) intent.getParcelableExtra(NfcAdapter.EXTRA_TAG));
-                try {
-                    mfc.connect();
-                    for (int k = 0; k < 16; k++) {
-                        boolean isAuthenticate = false;
-
-                        if (mfc.authenticateSectorWithKeyA(k, MifareClassic.KEY_DEFAULT)) {
-                            isAuthenticate = true;
-                            if (!MyVariables.IsProduction) {
-                                Log.d("Auth-A:", "KEY_DEFAULT");
-                                sb.append("AuthenticateSectorWithKey - A: KEY_DEFAULT");
-                            }
-                        }
-
-                        if (isAuthenticate) {
-                            if (k == 2) {
-                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
-                                result[0] = data;
-                                if (!MyVariables.IsProduction) {
-                                    Log.v("Sector:", "S-" + k + " Data:" + toHex(data));
-                                }
-                            } else if (k == 5) {
-                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
-                                result[1] = data;
-                                if (!MyVariables.IsProduction) {
-                                    Log.v("Sector:", "S-" + k + " Data:" + toHex(data));
-                                }
-                            } else if (k == 8) {
-                                byte[] data = mfc.readBlock(mfc.sectorToBlock(k));
-                                result[2] = data;
-                                if (!MyVariables.IsProduction) {
-                                    Log.v("Sector:", "S-" + k + " Data:" + toHex(data));
-                                }
-                            }
-                        }
+            } catch (Exception e) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(GenActivity.this, "Please Tap Valid Card", Toast.LENGTH_LONG).show();
                     }
-                    if (result[0] == null || result[1] == null || result[2] == null) {
-                        if (mfc.isConnected()) {
-                            try {
-                                mfc.close();
-                            } catch (Exception e) {
-                            }
-                        }
-                        if (!MyVariables.IsProduction) {
-                            Log.d("Error:", "MASTER_CARD_ERROR");
-                        }
-                        sb.append("Error - MASTER_CARD_ERROR");
-                        return "MASTER_CARD_ERROR";
-                    }
-                    byte[] bt = Utility.calculateResult(result);
-                    byte[] result1 = new byte[8];
-                    byte[] result2 = new byte[8];
-                    System.arraycopy(bt, 0, result1, 0, 8);
-                    System.arraycopy(bt, 8, result2, 0, 8);
-                    if (Arrays.equals(result1, result2)) {
-                        byte[] key = new byte[6];
-                        System.arraycopy(result1, 0, key, 0, 6);
-                        System.arraycopy(result1, 0, MyVariables.CARD_AUTH_KEY, 0, 6);
-
-                        MyVariables.SECTOR_NUMBER = result1[6];
-                        if (mfc.isConnected()) {
-                            try {
-                                mfc.close();
-                            } catch (Exception e2) {
-                            }
-                        }
-                        if (!MyVariables.IsProduction) {
-                            Log.d("SUCCESS:", "SUCCESS");
-                            //reading_data.setText("Master Card read successfully.");
-                            Log.d("Data1:", toHex(result[0]));
-                            Log.d("Data2:", toHex(result[1]));
-                            Log.d("Data3:", toHex(result[2]));
-                            Log.d("Final:", toHex(bt));
-
-                            Log.d("Result1:", toHex(result1) + " - " + toDec(result1) + " - " + toReversedDec(result1) + " - " + new String(result1).trim());
-                            Log.d("Result2:", toHex(result2) + " - " + toDec(result2) + " - " + toReversedDec(result2) + " - " + new String(result2).trim());
-                            Log.d("KEY:", toReversedHex(MyVariables.CARD_AUTH_KEY));
-                            Log.d("SECTOR", "" + MyVariables.SECTOR_NUMBER);
-                        }
-                        if (toDec(MyVariables.CARD_AUTH_KEY) == 0) {
-                            sb.append("This is not Master Card. Please tap/scan Master Card");
-                            MyVariables.SECTOR_NUMBER = 0;
-                            MyVariables.CARD_AUTH_KEY = new byte[6];
-                        } else {
-                            sb.append("Master Card read successfully. Now You Can Scan/Tap User Card");
-                        }
-
-                        flag = true;
-                        return "SUCCESS";
-                    }
-                    if (mfc.isConnected()) {
-                        try {
-                            mfc.close();
-                        } catch (Exception e3) {
-                        }
-                    }
-                    Log.d("Error:", "ERROR");
-                    sb.append("Error: ERROR");
-                    return "ERROR";
-                } catch (Exception ex) {
-                    String str = "EXCEPTION: " + ex.toString();
-                    sb.append("Error: " + str);
-                    Log.d("Error:", str);
-                    if (!mfc.isConnected()) {
-                        return str;
-                    }
-                    try {
-                        mfc.close();
-                        return str;
-                    } catch (Exception e4) {
-                        return str;
-                    }
-                } catch (Throwable th) {
-                    if (mfc.isConnected()) {
-                        try {
-                            mfc.close();
-                        } catch (Exception e5) {
-                        }
-                    }
-                    throw th;
-                }
-                //#endregion MasterCardRead
+                });
             }
+
             return "CARD_ERROR";
+        }
+
+        String otherCardTapMethod(String firstCardNumber, String secondCardNumber) {
+
+            UserDetailsResult detailsResult = findUserFromList(firstCardNumber);
+            if (!MyVariables.IsProduction) {
+                Log.e("detailsResult: ", detailsResult.toString());
+            }
+            if (!detailsResult.getParentRFIDs().isEmpty()) {
+
+                boolean isRefIdAvailable = false;
+
+                for (ParentRFID parentRFID : detailsResult.getParentRFIDs()) {
+
+                    //#2. Check if user id is matching
+                    if (Objects.equals(parentRFID.getRFID(), secondCardNumber)) {
+                        //#3. Matches, user id exists, get the record and out from loop
+                        isRefIdAvailable = true;
+                        break;
+                    }
+                }
+                if (isRefIdAvailable) {
+                    strCardNumber = secondCardNumber;
+                    callAttendancePushCallApi();
+                } else {
+                    showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
+                }
+            } else {
+                showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
+            }
+            return this.strCardNumber;
+        }
+
+        // old attendance push api call
+        void callAttendancePushCallApi() {
+            AttendanceModel model = new AttendanceModel();
+
+            UserDetailsResult detailsResult = findUserFromList(this.strCardNumber);
+
+            if (detailsResult.getUserID() > 0) {
+
+                boolean isAllowed = detailsResult.isDenied();
+                String oDeniedReason = detailsResult.getDeniedReason();
+
+                oDeniedReason = (oDeniedReason.isEmpty()) ? "Manual" : oDeniedReason;
+
+                if (isAllowed) {
+                    final String deniedReason = oDeniedReason;
+                    progressDialog.dismiss();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "This user is denied because of this reason\n" + deniedReason);
+                            assert alertDialog != null;
+                            alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface arg0, int arg1) {
+
+                                }
+                            });
+                            alertDialog.show();
+                        }
+                    });
+                }
+                //else {
+                Map<String, String> params1 = new HashMap<>();
+                List<UserAttendanceExternalAPIVM> externalAPIVMList = new ArrayList<UserAttendanceExternalAPIVM>();
+                String attendanceTakeTime = MyVariables.getSystemDateTime();
+                UserAttendanceExternalAPIVM externalAPIVM = new UserAttendanceExternalAPIVM(this.strCardNumber, MyVariables.deviceID, attendanceTakeTime, attendanceTakeTime, "Default", Objects.equals(deviceType, "bus") ? "Bus" : "Car", lattitude, longtitude, "10", true, Objects.equals(deviceType, "bus"), "In", !isAllowed, oDeniedReason);
+                externalAPIVMList.add(externalAPIVM);
+                Gson gson = new Gson();
+
+                params1.put("pRequestCriteria", "insert");
+                params1.put("pRequestJsonData", gson.toJson(externalAPIVMList));
+
+                // TODO
+                UserDetailsResult userD = new UserDetailsResult();
+                //find user from list
+                userD = findUserFromList(this.strCardNumber);
+
+                model.setId(userD.getUserID());
+                model.setDateTime(attendanceTakeTime);
+                model.setScannedCard(this.strCardNumber);
+                model.setClassName(userD.getClassName() + " - " + detailsResult.getDivisionName());
+                model.setName(userD.getUserName());
+                model.setType(deviceType);
+                model.setData(gson.toJson(externalAPIVMList));
+                Log.d("AttendanceNFCMobilePush", externalAPIVMList.toString());
+                webService.sendPostRequest("/ExternalAPI/UserAttendanceNFCMobileDataPush", params1, new VolleyCallback() {
+                    @Override
+                    public void onSuccess(String result) {
+                        Log.v("Data222", result);
+
+                        String responseMessage = "";
+                        boolean success = false;
+                        UserAttendanceResponse responseModel = new UserAttendanceResponse();
+                        try {
+                            responseModel = gson.fromJson(result, UserAttendanceResponse.class);
+                            responseMessage = responseModel.getResponseMessage();
+                            success = responseModel.isSuccess();
+                        } catch (Exception ex) {
+                            ResponseModel responseModel2 = gson.fromJson(result, ResponseModel.class);
+                            success = responseModel2.isSuccess();
+                            if (responseModel2.isSuccess()) {
+                            } else {
+                                responseMessage = responseModel2.getResponseMessage();
+                            }
+                        }
+                        //ResponseModel responseModel = gson.fromJson(result, ResponseModel.class);
+
+                        //Log.v("ResponseData", gson.toJson(responseModel.getResponseData()));
+                        //Log.v("ResponseMessage", responseModel.getResponseMessage());
+                        //Log.v("Success", "" + responseModel.isSuccess());
+                        progressDialog.dismiss();
+                        if (success) {
+                            clearRFID();
+                            setStatus("200 - " + responseMessage, model, false);
+                            List<UserAttendanceDataPushResult> resultList = new ArrayList<UserAttendanceDataPushResult>();
+                            resultList = responseModel.getResponseData();
+                            UserAttendanceDataPushResult dataPushResult = resultList.get(0);
+                            List<UserDetailsResult> userDetailsResults = new ArrayList<UserDetailsResult>();
+                            UserDetailsResult detailsResult = new UserDetailsResult();
+
+                            //find user from list
+                            detailsResult = findUserFromList(KeyGenerator.this.strCardNumber);
+                            if (dataPushResult.RFID == KeyGenerator.this.strCardNumber && dataPushResult.Result == 1) {
+
+                                if (detailsResult.getUserID() > 0) {
+                                    UserDetailsResult finalDetailsResult = detailsResult;
+                                    boolean ss = success;
+                                    String msg = responseMessage;
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            if (ss) {
+                                                TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                                rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
+
+                                                //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                                //userName.setText("");
+
+                                                if (finalDetailsResult.UserID > 0) {
+                                                    ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                    ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                    ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
+                                                    String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
+                                                    ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+
+                                                    TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+
+                                                    MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + KeyGenerator.this.strCardNumber + " | " + attendanceTakeTime);
+
+                                                    ScannedUserDetailsResult se = new ScannedUserDetailsResult();
+                                                    se.userDetailsResult = finalDetailsResult;
+                                                    se.scannedCard = KeyGenerator.this.strCardNumber;
+                                                    se.isAttendanceTaken = true;
+                                                    se.attendanceTakenTime = attendanceTakeTime;
+
+                                                    MyVariables.lstScannedCard.add(se);
+
+                                                    MyVariables.lstScannedUsers.add(finalDetailsResult);
+                                                    MyVariables.lstSuccessUsersList.add(finalDetailsResult);
+                                                           /*scanned_data.setText("");
+                                                           scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                           for (String scancard : MyVariables.scanedCard) {
+                                                               scanned_data.append("\n" + scancard);
+                                                           }*/
+                                                    displayScannedDetails();
+                                                }
+                                                mToastHandler.showToast(msg, Toast.LENGTH_LONG);
+                                            }
+                                        }
+                                    });
+                                } else {
+                                    MyVariables.lstScannedUsers.add(detailsResult);
+                                    MyVariables.lstFailedUserList.add(detailsResult);
+
+                                    UserDetailsResult finalDetailsResult = detailsResult;
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                            rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
+
+                                            //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                            //userName.setText("");
+
+                                            if (finalDetailsResult.UserID > 0) {
+                                                ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
+                                                String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
+                                                ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+
+                                                TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+
+                                                MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + KeyGenerator.this.strCardNumber + " | " + attendanceTakeTime);
+
+                                                ScannedUserDetailsResult se = new ScannedUserDetailsResult();
+                                                se.userDetailsResult = finalDetailsResult;
+                                                se.scannedCard = KeyGenerator.this.strCardNumber;
+                                                se.isAttendanceTaken = true;
+                                                se.attendanceTakenTime = attendanceTakeTime;
+
+                                                MyVariables.lstScannedCard.add(se);
+                                                MyVariables.lstScannedUsers.add(finalDetailsResult);
+                                                MyVariables.lstSuccessUsersList.add(finalDetailsResult);
+                                                       /*scanned_data.setText("");
+                                                       scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                       for (String scancard : MyVariables.scanedCard) {
+                                                           scanned_data.append("\n" + scancard);
+                                                       }*/
+                                                displayScannedDetails();
+                                            }
+                                            mToastHandler.showToast("Attendance not taken for this user.", Toast.LENGTH_LONG);
+                                        }
+                                    });
+
+
+                                }
+                            } else if (Objects.equals(dataPushResult.RFID, KeyGenerator.this.strCardNumber) && dataPushResult.Result == 2) {
+                                MyVariables.lstScannedUsers.add(detailsResult);
+                                MyVariables.lstFailedUserList.add(detailsResult);
+
+                                ScannedUserDetailsResult se = new ScannedUserDetailsResult();
+                                se.userDetailsResult = detailsResult;
+                                se.scannedCard = KeyGenerator.this.strCardNumber;
+                                se.isAttendanceTaken = false;
+                                se.attendanceTakenTime = attendanceTakeTime;
+
+                                MyVariables.lstScannedCard.add(se);
+
+                            } else {
+                                UserDetailsResult finalDetailsResult = detailsResult;
+                                boolean isSss = success;
+                                String msg = responseMessage;
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        if (isSss) {
+                                            TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                            rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
+
+                                            //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                            //userName.setText("");
+
+                                            if (finalDetailsResult.UserID > 0) {
+                                                ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
+                                                String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
+                                                ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+
+                                                TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+
+                                                MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + KeyGenerator.this.strCardNumber + " | " + attendanceTakeTime);
+
+                                                MyVariables.lstScannedUsers.add(finalDetailsResult);
+                                                ScannedUserDetailsResult se = new ScannedUserDetailsResult();
+                                                se.userDetailsResult = finalDetailsResult;
+                                                se.scannedCard = KeyGenerator.this.strCardNumber;
+                                                se.isAttendanceTaken = true;
+                                                se.attendanceTakenTime = attendanceTakeTime;
+
+                                                MyVariables.lstScannedCard.add(se);
+                                                       /*scanned_data.setText("");
+                                                       scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                       for (String scancard : MyVariables.scanedCard) {
+                                                           scanned_data.append("\n" + scancard);
+                                                       }*/
+
+                                                displayScannedDetails();
+                                            }
+                                            mToastHandler.showToast(msg, Toast.LENGTH_LONG);
+                                        }
+                                    }
+                                });
+                                //GenActivity.this.hideLastScanned();
+                            }
+                        } else {
+                            setStatus("Error - " + responseMessage, model, false);
+                            String msg = responseMessage;
+                            progressDialog.dismiss();
+                            mToastHandler.showToast(msg, Toast.LENGTH_LONG);
+
+                            UserDetailsResult detailsResult = findUserFromList(KeyGenerator.this.strCardNumber);
+                            final UserAttendanceResponse res = responseModel;
+
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (res.getResponseData() != null) {
+                                        TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                        rd.setText("Attendance not recorded of this user.");
+
+                                        //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                        //userName.setText("");
+
+                                        if (detailsResult.UserID > 0) {
+                                            ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                            ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(detailsResult.UserFullName);
+                                            ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
+                                            String uid = detailsResult.UID.isEmpty() ? "" : detailsResult.UID;
+                                            ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+
+                                            TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+
+                                            MyVariables.scanedCard.add(detailsResult.UserFullName + " | " + KeyGenerator.this.strCardNumber + " | " + "Not taken");
+
+                                            MyVariables.lstScannedUsers.add(detailsResult);
+
+
+                                            ScannedUserDetailsResult se = new ScannedUserDetailsResult();
+                                            se.userDetailsResult = detailsResult;
+                                            se.scannedCard = KeyGenerator.this.strCardNumber;
+                                            se.isAttendanceTaken = false;
+                                            se.attendanceTakenTime = attendanceTakeTime;
+
+                                            MyVariables.lstScannedCard.add(se);
+
+                                                   /*scanned_data.setText("");
+                                                   scanned_data.setText("\nYou have scan below Card, today. (" + MyVariables.scanedCard.size() + ")");
+                                                   for (String scancard : MyVariables.scanedCard) {
+                                                       scanned_data.append("\n" + scancard);
+                                                   }*/
+                                            displayScannedDetails();
+                                        }
+
+                                        mToastHandler.showToast(msg, Toast.LENGTH_LONG);
+
+                                    } else {
+
+                                        ScannedUserDetailsResult se = new ScannedUserDetailsResult();
+                                        se.userDetailsResult = detailsResult;
+                                        se.scannedCard = KeyGenerator.this.strCardNumber;
+                                        se.isAttendanceTaken = false;
+                                        se.attendanceTakenTime = attendanceTakeTime;
+
+                                        MyVariables.lstScannedCard.add(se);
+
+                                        TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                        rd.setText("Attendance not recorded of this user.");
+                                    }
+                                }
+                            });
+                            //GenActivity.this.hideLastScanned();
+                        }
+                    }
+
+                });
+                // }
+            } else {
+                setStatus("Error - Details not found.", model, false);
+                Log.v("NoDetails", "Details not found.");
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "This scanned card is not found in the system.");
+                        assert alertDialog != null;
+                        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface arg0, int arg1) {
+
+                            }
+                        });
+                        alertDialog.show();
+                    }
+                });
+            }
         }
 
 
@@ -1903,6 +2057,7 @@ public class GenActivity extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
+                                clearRFID();
                                 if (!responseModel.getResponseData().isEmpty()) {
                                     KeyGenerator.this.reading_data.setText("Attendance Taken Successfully.");
                                     KeyGenerator.this.reading_data.append("\n\nData: " + responseModel.getResponseData());
@@ -2037,25 +2192,84 @@ public class GenActivity extends AppCompatActivity {
                     mToastHandler.showToast(result, Toast.LENGTH_LONG);
                     startActivity(new Intent(GenActivity.this, SplashScreen.class));
                 } else {
-                    List<UserDetailsResult> JsonList = mapper.readValue(result, new TypeReference<List<UserDetailsResult>>() {});
+                    JSONArray jsonArr = new JSONArray(result);
+                    participantJsonList = new ArrayList<>();
+                    try {
+                        for (int i = 0; i < jsonArr.length(); i++) {
+                            JSONObject jsonObj = jsonArr.getJSONObject(i);
+                            UserDetailsResult data = new UserDetailsResult();
+//                           "UserID": 14208,
+//                           "UserName": "AA104",
+//                           "UserFullName": "Amit Hasmukhlal Shah",
+//                           "ContactNo": "7045231788",
+//                           "UID": "AA104",
+//                           "ClassName": "1",
+//                           "DivisionName": "B",
+//                           "UserType": "Student",
+//                           "RFIDNumbers": "",
+//                           "IsActive": false,
+//                           "IsDenied": false,
+//                           "DeniedReason": "",
+//                           "IsParentRFIDCheckRequired": false,
+                            if (jsonObj.has("UserID")) data.setUserID(jsonObj.getInt("UserID"));
+                            if (jsonObj.has("UserName"))
+                                data.setUserName(jsonObj.getString("UserName"));
+                            if (jsonObj.has("UserFullName"))
+                                data.setUserFullName(jsonObj.getString("UserFullName"));
+                            if (jsonObj.has("ContactNo"))
+                                data.setContactNo(jsonObj.getString("ContactNo"));
+                            if (jsonObj.has("UID")) data.setUID(jsonObj.getString("UID"));
+                            if (jsonObj.has("ClassName"))
+                                data.setClassName(jsonObj.getString("ClassName"));
+                            if (jsonObj.has("DivisionName"))
+                                data.setDivisionName(jsonObj.getString("DivisionName"));
+                            if (jsonObj.has("UserType"))
+                                data.setUserType(jsonObj.getString("UserType"));
+                            if (jsonObj.has("RFIDNumbers"))
+                                data.setRFIDNumbers(jsonObj.getString("RFIDNumbers"));
+                            if (jsonObj.has("IsActive"))
+                                data.setActive(jsonObj.getBoolean("IsActive"));
+                            if (jsonObj.has("IsDenied"))
+                                data.setDenied(jsonObj.getBoolean("IsDenied"));
+                            if (jsonObj.has("DeniedReason"))
+                                data.setDeniedReason(jsonObj.getString("DeniedReason"));
+                            if (jsonObj.has("IsParentRFIDCheckRequired"))
+                                data.setParentRFIDCheckRequired(jsonObj.getBoolean("IsParentRFIDCheckRequired"));
 
-                    for (int i = 0; i < JsonList.size(); i++) {
-                        if (JsonList.get(i).UserName.equalsIgnoreCase("mobileverifieduser") || Objects.equals(JsonList.get(i).getUserName(), "") || JsonList.get(i).getUserName() == null) {
-                            JsonList.remove(i);
+                            JSONArray arr = jsonObj.getJSONArray("ParentRFIDs");
+                            List<ParentRFID> parentRFIDs = new ArrayList<ParentRFID>();
+                            for (int k = 0; k < arr.length(); k++) {
+                                JSONObject jsonObj1 = arr.getJSONObject(k);
+                                ParentRFID datap = new ParentRFID();
+                                datap.setUserRFIDID(jsonObj1.getInt("UserRFIDID"));
+                                datap.setUserID(jsonObj1.getInt("UserID"));
+                                datap.setRFID(jsonObj1.getString("RFID"));
+                                datap.setIsDeActive(jsonObj1.getBoolean("IsDeActive"));
+                                parentRFIDs.add(datap);
+                            }
+
+                            data.setParentRFIDs(parentRFIDs);
+
+                            if ((data.getUserName() != null && !data.getUserName().isEmpty()) || !data.getUserName().equalsIgnoreCase("mobileverifieduser")) {
+                                participantJsonList.add(data);
+                            }
                         }
+                    } catch (JSONException e) {
+                        e.printStackTrace();
                     }
-                    participantJsonList = JsonList;
+
+                    // Log arrUserDetailsResult
+//                    participantJsonList = JsonList;
 //                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
 //                        participantJsonList.removeIf(filter -> filter.UserName.equalsIgnoreCase("mobileverifieduser") || Objects.equals(filter.getUserName(), "") || filter.getUserName() == null);
                     finaluserDetailsResults = participantJsonList;
 //                    }
                     //StudentDataCall.this.student_data.setText("Total: " + participantJsonList.size());
 
-                    SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), Context.MODE_PRIVATE);
+                    SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), MODE_PRIVATE);
                     SharedPreferences.Editor myEdit = sharedPreferences.edit();
-                    myEdit.putString(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), result);
-                    myEdit.commit();
-
+                    myEdit.putString(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), jsonArr.toString());
+                    myEdit.apply();
                     //StudentData.this.student_data.append(result);
 
                /*StudentDataAdapter adapter = new StudentDataAdapter(getApplicationContext(), R.id.title, participantJsonList);
@@ -2533,20 +2747,71 @@ public class GenActivity extends AppCompatActivity {
                     }
                 }
             } else {
-                SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), Context.MODE_PRIVATE);
-                String data = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), "");
-                if (!data.isEmpty()) {
-                    Log.v("Data2:", data);
-                    final ObjectMapper mapper = new ObjectMapper();
-                    try {
-                        userDetailsResults = mapper.readValue(data, new TypeReference<List<UserDetailsResult>>() {
+                SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), MODE_PRIVATE);
+                String result = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), "");
+                if (!result.isEmpty()) {
+                    Log.v("Data2:", result);
 
-                        });
-                        finaluserDetailsResults = userDetailsResults;
-                    } catch (IOException e) {
-                        Log.v("Data223:", e.toString());
+                    JSONArray jsonArr = new JSONArray(result);
+
+                    try {
+                        for (int i = 0; i < jsonArr.length(); i++) {
+                            JSONObject jsonObj = jsonArr.getJSONObject(i);
+                            UserDetailsResult data = new UserDetailsResult();
+                            if (jsonObj.has("UserID")) data.setUserID(jsonObj.getInt("UserID"));
+                            if (jsonObj.has("UserName"))
+                                data.setUserName(jsonObj.getString("UserName"));
+                            if (jsonObj.has("UserFullName"))
+                                data.setUserFullName(jsonObj.getString("UserFullName"));
+                            if (jsonObj.has("ContactNo"))
+                                data.setContactNo(jsonObj.getString("ContactNo"));
+                            if (jsonObj.has("UID")) data.setUID(jsonObj.getString("UID"));
+                            if (jsonObj.has("ClassName"))
+                                data.setClassName(jsonObj.getString("ClassName"));
+                            if (jsonObj.has("DivisionName"))
+                                data.setDivisionName(jsonObj.getString("DivisionName"));
+                            if (jsonObj.has("UserType"))
+                                data.setUserType(jsonObj.getString("UserType"));
+                            if (jsonObj.has("RFIDNumbers"))
+                                data.setRFIDNumbers(jsonObj.getString("RFIDNumbers"));
+                            if (jsonObj.has("IsActive"))
+                                data.setActive(jsonObj.getBoolean("IsActive"));
+                            if (jsonObj.has("IsDenied"))
+                                data.setDenied(jsonObj.getBoolean("IsDenied"));
+                            if (jsonObj.has("DeniedReason"))
+                                data.setDeniedReason(jsonObj.getString("DeniedReason"));
+                            if (jsonObj.has("IsParentRFIDCheckRequired"))
+                                data.setParentRFIDCheckRequired(jsonObj.getBoolean("IsParentRFIDCheckRequired"));
+
+
+                            JSONArray arr = jsonObj.getJSONArray("ParentRFIDs");
+                            List<ParentRFID> parentRFIDs = new ArrayList<ParentRFID>();
+                            for (int k = 0; k < arr.length(); k++) {
+                                JSONObject jsonObj1 = arr.getJSONObject(k);
+                                ParentRFID datap = new ParentRFID();
+//                              "UserRFIDID": 0,
+//                              "UserID": 59253,
+//                              "RFID": "1421422489",
+//                              "IsDeActive": false
+                                datap.setUserRFIDID(jsonObj1.getInt("UserRFIDID"));
+                                datap.setUserID(jsonObj1.getInt("UserID"));
+                                datap.setRFID(jsonObj1.getString("RFID"));
+                                datap.setIsDeActive(jsonObj1.getBoolean("IsDeActive"));
+                                parentRFIDs.add(datap);
+                            }
+
+                            data.setParentRFIDs(parentRFIDs);
+
+                            if ((data.getUserName() != null && !data.getUserName().isEmpty())) {
+                                userDetailsResults.add(data);
+                            }
+                        }
+                    } catch (JSONException e) {
                         e.printStackTrace();
                     }
+
+
+                    finaluserDetailsResults = userDetailsResults;
 
                     for (UserDetailsResult us : userDetailsResults) {
                         if (us.RFIDNumbers.contains(strCardNumber)) {
@@ -2614,6 +2879,11 @@ public class GenActivity extends AppCompatActivity {
 
 
                                     sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), MODE_PRIVATE);
+                                    editor = sharedPreferences.edit();
+                                    editor.clear();
+                                    editor.commit();
+
+                                    sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), MODE_PRIVATE);
                                     editor = sharedPreferences.edit();
                                     editor.clear();
                                     editor.commit();
@@ -3198,5 +3468,51 @@ public class GenActivity extends AppCompatActivity {
         return Environment.MEDIA_MOUNTED_READ_ONLY.equals(extStorageState);
     }
 
+    void showAddAnotherUserPopup(String msg) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (!tapAlertDialog.isShowing())
+                    tapAlertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), msg);
 
+                assert tapAlertDialog != null;
+                tapAlertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface arg0, int arg1) {
+                        clearRFID();
+                    }
+                });
+                tapAlertDialog.setCancelable(false);
+                tapAlertDialog.setOnKeyListener((dialog, keyCode, event) -> {
+                    if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
+                        // Handle the back button press here
+                        return true; // Indicate that the event is handled
+                    }
+                    return false;
+                });
+                tapAlertDialog.show();
+            }
+        });
+    }
+
+    void checkUserRFIDAvailable() {
+        SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), MODE_PRIVATE);
+        String getStudentRFID = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), "");
+        if (!getStudentRFID.isEmpty()) {
+            UserDetailsResult detailsResult = findUserFromList(getStudentRFID);
+            if (!detailsResult.getRFIDNumbers().isEmpty()) {
+                showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
+            } else {
+                Toast.makeText(GenActivity.this, "\"Please use Valid Card", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    void clearRFID() {
+        SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.clear();
+        editor.commit();
+        tapAlertDialog.dismiss();
+    }
 }
