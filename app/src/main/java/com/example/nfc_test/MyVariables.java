@@ -389,6 +389,7 @@ public class MyVariables extends Application {
         FAILED_SCANNED_USERS_LIST,
         ISDEFAULTMASTERCARDUSE,
         USER_RFID,
+        DEVICE_TYPE,
     }
 
     public static Drawable getCaptchaImage() {

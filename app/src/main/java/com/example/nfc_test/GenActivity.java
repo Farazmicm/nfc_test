@@ -212,11 +212,7 @@ public class GenActivity extends AppCompatActivity {
             String cardData = mSharedPreferences.getString(MyVariables.DEFAULT_ENUM.ISDEFAULTMASTERCARDUSE.toString(), "");
             //Log.v("cardddddd2222222222", cardData);
             if (!cardData.isEmpty()) {
-                if (cardData.equals("true")) {
-                    MyVariables.isMasterCardRead = true;
-                } else {
-                    MyVariables.isMasterCardRead = false;
-                }
+                MyVariables.isMasterCardRead = cardData.equals("true");
             }
             //Log.v("MyVariables", "" + MyVariables.isMasterCardRead);
             //Log.v("MyVariables", "" + MyVariables.SECTOR_NUMBER);
@@ -289,6 +285,55 @@ public class GenActivity extends AppCompatActivity {
                }
            });*/
 
+            busSwitch = findViewById(R.id.busSwitch);
+            gateSwitch = findViewById(R.id.gateSwitch);
+            SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.DEVICE_TYPE.toString(), MODE_PRIVATE);
+            String dType = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.DEVICE_TYPE.toString(), "");
+            deviceType = !dType.isEmpty() ? dType : "bus";
+            saveDeviceType();
+
+            if (Objects.equals(deviceType, "bus")) {
+                busSwitch.setChecked(true);
+            } else {
+                gateSwitch.setChecked(true);
+            }
+
+            busSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (Utility.checkInternet(GenActivity.this)) {
+                    if (isChecked) {
+                        deviceType = "bus";
+                        gateSwitch.setChecked(false);
+                        saveDeviceType();
+                    } else {
+                        deviceType = "gate";
+                        gateSwitch.setChecked(true);
+                        saveDeviceType();
+                    }
+                    new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
+                } else {
+                    busSwitch.setChecked(!isChecked);
+                    Utility.openInternetNotAvailable(GenActivity.this, "");
+                }
+            });
+
+            gateSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                if (Utility.checkInternet(GenActivity.this)) {
+                    if (isChecked) {
+                        deviceType = "gate";
+                        busSwitch.setChecked(false);
+                        saveDeviceType();
+                    } else {
+                        deviceType = "bus";
+                        busSwitch.setChecked(true);
+                        saveDeviceType();
+                    }
+                    new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
+                } else {
+                    gateSwitch.setChecked(!isChecked);
+                    Utility.openInternetNotAvailable(GenActivity.this, "");
+                }
+            });
+
             if (Utility.checkInternet(GenActivity.this)) {
                 new StudentDataCall(this, (StudentDataCall) null).execute();
             } else {
@@ -305,47 +350,6 @@ public class GenActivity extends AppCompatActivity {
             } catch (Exception ex) {
 
             }
-
-            busSwitch = findViewById(R.id.busSwitch);
-            gateSwitch = findViewById(R.id.gateSwitch);
-
-            if (Objects.equals(deviceType, "bus")) {
-                busSwitch.setChecked(true);
-            } else {
-                gateSwitch.setChecked(true);
-            }
-
-            busSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (Utility.checkInternet(GenActivity.this)) {
-                    if (isChecked) {
-                        deviceType = "bus";
-                        gateSwitch.setChecked(false);
-                    } else {
-                        deviceType = "gate";
-                        gateSwitch.setChecked(true);
-                    }
-                    new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
-                } else {
-                    busSwitch.setChecked(!isChecked);
-                    Utility.openInternetNotAvailable(GenActivity.this, "");
-                }
-            });
-
-            gateSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (Utility.checkInternet(GenActivity.this)) {
-                    if (isChecked) {
-                        deviceType = "gate";
-                        busSwitch.setChecked(false);
-                    } else {
-                        deviceType = "bus";
-                        busSwitch.setChecked(true);
-                    }
-                    new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
-                } else {
-                    gateSwitch.setChecked(!isChecked);
-                    Utility.openInternetNotAvailable(GenActivity.this, "");
-                }
-            });
 
 
 //            chipGroup = findViewById(R.id.chipGroup);
@@ -1362,29 +1366,27 @@ public class GenActivity extends AppCompatActivity {
                             Log.e("finalStrcardnumber: ", newStrCardNumber);
                         }
                         if (!finaluserDetailsResults.isEmpty()) {
-                            if (finaluserDetailsResults.get(0).getParentRFIDCheckRequired()) {
-                                SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), MODE_PRIVATE);
-                                String getStudentRFID = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), "");
-                                if (getStudentRFID.isEmpty()) {
-                                    UserDetailsResult detailsResult = findUserFromList(newStrCardNumber);
-                                    if (!detailsResult.getRFIDNumbers().isEmpty()) {
+                            SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), MODE_PRIVATE);
+                            String getStudentRFID = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), "");
+                            if (getStudentRFID.isEmpty()) {
+                                UserDetailsResult detailsResult = findUserFromList(newStrCardNumber);
+                                if (!detailsResult.getRFIDNumbers().isEmpty()) {
+                                    if (detailsResult.getParentRFIDCheckRequired()) {
                                         SharedPreferences.Editor myEdit = sharedPreferences.edit();
                                         myEdit.putString(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), newStrCardNumber);
                                         myEdit.apply();
                                         showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
                                     } else {
-                                        Toast.makeText(GenActivity.this, "Please use Valid Card for Attendance", Toast.LENGTH_SHORT).show();
+                                        strCardNumber = newStrCardNumber;
+                                        callAttendancePushCallApi();
                                     }
                                 } else {
-                                    otherCardTapMethod(getStudentRFID, newStrCardNumber);
+                                    Toast.makeText(GenActivity.this, "Please use Valid Card for Attendance", Toast.LENGTH_SHORT).show();
                                 }
                             } else {
-                                strCardNumber = newStrCardNumber;
-                                callAttendancePushCallApi();
+                                otherCardTapMethod(getStudentRFID, newStrCardNumber);
                             }
                         }
-
-
 //                    StringBuilder sb = new StringBuilder();
 //                    byte[] id = tag.getId();
 
@@ -2236,19 +2238,21 @@ public class GenActivity extends AppCompatActivity {
                             if (jsonObj.has("IsParentRFIDCheckRequired"))
                                 data.setParentRFIDCheckRequired(jsonObj.getBoolean("IsParentRFIDCheckRequired"));
 
-                            JSONArray arr = jsonObj.getJSONArray("ParentRFIDs");
-                            List<ParentRFID> parentRFIDs = new ArrayList<ParentRFID>();
-                            for (int k = 0; k < arr.length(); k++) {
-                                JSONObject jsonObj1 = arr.getJSONObject(k);
-                                ParentRFID datap = new ParentRFID();
-                                datap.setUserRFIDID(jsonObj1.getInt("UserRFIDID"));
-                                datap.setUserID(jsonObj1.getInt("UserID"));
-                                datap.setRFID(jsonObj1.getString("RFID"));
-                                datap.setIsDeActive(jsonObj1.getBoolean("IsDeActive"));
-                                parentRFIDs.add(datap);
-                            }
+                            if(jsonObj.has("ParentRFIDs")){
+                                JSONArray arr = jsonObj.getJSONArray("ParentRFIDs");
+                                List<ParentRFID> parentRFIDs = new ArrayList<ParentRFID>();
+                                for (int k = 0; k < arr.length(); k++) {
+                                    JSONObject jsonObj1 = arr.getJSONObject(k);
+                                    ParentRFID datap = new ParentRFID();
+                                    datap.setUserRFIDID(jsonObj1.getInt("UserRFIDID"));
+                                    datap.setUserID(jsonObj1.getInt("UserID"));
+                                    datap.setRFID(jsonObj1.getString("RFID"));
+                                    datap.setIsDeActive(jsonObj1.getBoolean("IsDeActive"));
+                                    parentRFIDs.add(datap);
+                                }
 
-                            data.setParentRFIDs(parentRFIDs);
+                                data.setParentRFIDs(parentRFIDs);
+                            }
 
                             if ((data.getUserName() != null && !data.getUserName().isEmpty()) || !data.getUserName().equalsIgnoreCase("mobileverifieduser")) {
                                 participantJsonList.add(data);
@@ -2783,24 +2787,25 @@ public class GenActivity extends AppCompatActivity {
                             if (jsonObj.has("IsParentRFIDCheckRequired"))
                                 data.setParentRFIDCheckRequired(jsonObj.getBoolean("IsParentRFIDCheckRequired"));
 
-
-                            JSONArray arr = jsonObj.getJSONArray("ParentRFIDs");
-                            List<ParentRFID> parentRFIDs = new ArrayList<ParentRFID>();
-                            for (int k = 0; k < arr.length(); k++) {
-                                JSONObject jsonObj1 = arr.getJSONObject(k);
-                                ParentRFID datap = new ParentRFID();
+                            if (jsonObj.has("ParentRFIDs")) {
+                                JSONArray arr = jsonObj.getJSONArray("ParentRFIDs");
+                                List<ParentRFID> parentRFIDs = new ArrayList<ParentRFID>();
+                                for (int k = 0; k < arr.length(); k++) {
+                                    JSONObject jsonObj1 = arr.getJSONObject(k);
+                                    ParentRFID datap = new ParentRFID();
 //                              "UserRFIDID": 0,
 //                              "UserID": 59253,
 //                              "RFID": "1421422489",
 //                              "IsDeActive": false
-                                datap.setUserRFIDID(jsonObj1.getInt("UserRFIDID"));
-                                datap.setUserID(jsonObj1.getInt("UserID"));
-                                datap.setRFID(jsonObj1.getString("RFID"));
-                                datap.setIsDeActive(jsonObj1.getBoolean("IsDeActive"));
-                                parentRFIDs.add(datap);
-                            }
+                                    datap.setUserRFIDID(jsonObj1.getInt("UserRFIDID"));
+                                    datap.setUserID(jsonObj1.getInt("UserID"));
+                                    datap.setRFID(jsonObj1.getString("RFID"));
+                                    datap.setIsDeActive(jsonObj1.getBoolean("IsDeActive"));
+                                    parentRFIDs.add(datap);
+                                }
 
-                            data.setParentRFIDs(parentRFIDs);
+                                data.setParentRFIDs(parentRFIDs);
+                            }
 
                             if ((data.getUserName() != null && !data.getUserName().isEmpty())) {
                                 userDetailsResults.add(data);
@@ -2888,6 +2893,11 @@ public class GenActivity extends AppCompatActivity {
                                     editor.clear();
                                     editor.commit();
 
+                                    sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.DEVICE_TYPE.toString(), MODE_PRIVATE);
+                                    editor = sharedPreferences.edit();
+                                    editor.clear();
+                                    editor.commit();
+
                                     MyVariables.MCAMPUS_TOKENID = "";
                                     //MyVariables.CARD_AUTH_KEY = new byte[6];
                                     //MyVariables.SECTOR_NUMBER = 0;
@@ -2895,6 +2905,7 @@ public class GenActivity extends AppCompatActivity {
                                     MyVariables.SCHOOL_WEB_URL = "";
                                     MyVariables.SCHOOL_GROUP_ID = 0;
                                     MyVariables.SCHOOL_GROUP_Name = "";
+                                    MyVariables.lstScannedUsers.clear();
 
                                     startActivity(new Intent(GenActivity.this, SplashScreen.class));
                                     finish();
@@ -3514,5 +3525,12 @@ public class GenActivity extends AppCompatActivity {
         editor.clear();
         editor.commit();
         tapAlertDialog.dismiss();
+    }
+
+    void saveDeviceType() {
+        SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.DEVICE_TYPE.toString(), MODE_PRIVATE);
+        SharedPreferences.Editor myEdit = sharedPreferences.edit();
+        myEdit.putString(MyVariables.DEFAULT_ENUM.DEVICE_TYPE.toString(), deviceType);
+        myEdit.apply();
     }
 }
