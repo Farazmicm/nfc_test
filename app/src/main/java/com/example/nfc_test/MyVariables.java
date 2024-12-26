@@ -105,7 +105,7 @@ public class MyVariables extends Application {
 
     public static String SCHOOL_GROUP_Name = "";
     public static String SCHOOL_GROUP_CODE = "";
-    public static String MOBILE_API_URL = "https://mobileapiv3.edusprint.in/";// "http://mobileapiv2.edusprint.in/";
+    public static String MOBILE_API_URL = "https://mobileapisecure.edusprint.in/";// "http://mobileapiv2.edusprint.in/";
     public static String SCHOOL_WEB_URL = "";
     public static String MCAMPUS_TOKENID = "";
     public static int USER_ID = 0;
@@ -329,12 +329,17 @@ public class MyVariables extends Application {
                 @Override
                 public void onSuccess(String result) {
                     Gson gson = new Gson();
-                    TokenModel tokenModel = gson.fromJson(result, TokenModel.class);
-                    if (tokenModel.isSuccess()) {
-                        MCAMPUS_TOKENID = tokenModel.getResponseData();
-                        Log.e("Response", result);
+                    try{
+                        if (!result.isEmpty()) {
+                            TokenModel tokenModel = gson.fromJson(result, TokenModel.class);
+                            if (tokenModel.isSuccess()) {
+                                MCAMPUS_TOKENID = tokenModel.getResponseData();
+                                Log.e("Response", result);
+                            }
+                        }
+                    }catch (Exception e){
+                        Log.e("Token Error", "Token Not genrated");
                     }
-
                 }
             });
             Thread.sleep(2000);
@@ -356,7 +361,7 @@ public class MyVariables extends Application {
 
             // Setting Dialog Message
 
-            alertDialog1.setMessage(message.isEmpty() ? Html.fromHtml("<span style=color:black>" + "Please wait.." + "</span>"): Html.fromHtml("<span style=color:black>" + message + "</span>"));
+            alertDialog1.setMessage(message.isEmpty() ? Html.fromHtml("<span style=color:black>" + "Please wait.." + "</span>") : Html.fromHtml("<span style=color:black>" + message + "</span>"));
 
             // Setting Icon to Dialog
             alertDialog1.setIcon(R.drawable.splashlogo);
@@ -397,10 +402,10 @@ public class MyVariables extends Application {
 
             if (!MyVariables.MCAMPUS_TOKENID.isEmpty()) {
                 String url = SCHOOL_WEB_URL + SCHOOL_GROUP_CODE + CAPTCH_LOAD_URL + "&_c=xcYYY01223";
-                //Log.v("captchaIURL",url);
+                Log.v("captchaIURL", url);
                 URL url1 = new URL(url);
                 URLConnection connection = url1.openConnection();
-                //Log.v("MCampusTOjken: ", MyVariables.MCAMPUS_TOKENID);
+                Log.v("MCampusTOjken: ", MyVariables.MCAMPUS_TOKENID);
                 connection.setRequestProperty("MCampusTokenID", MyVariables.MCAMPUS_TOKENID);
                 connection.setRequestProperty("Cookies", "MCampusTokenID=" + MyVariables.MCAMPUS_TOKENID);
                 connection.connect();

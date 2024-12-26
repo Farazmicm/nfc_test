@@ -28,7 +28,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Nfc_test"
         android:usesCleartextTraffic="false"
-        android:requestLegacyExternalStorage="true">
+        android:requestLegacyExternalStorage="true"
+        android:largeHeap="true">
 
         <activity
             android:name="com.example.nfc_test.SchoolGroupLogin"

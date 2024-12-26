@@ -103,12 +103,12 @@ class WebService {
         mStringRequest.setRetryPolicy(new RetryPolicy() {
             @Override
             public int getCurrentTimeout() {
-                return 50000;
+                return 5000000;
             }
 
             @Override
             public int getCurrentRetryCount() {
-                return 50000;
+                return 5000000;
             }
 
             @Override

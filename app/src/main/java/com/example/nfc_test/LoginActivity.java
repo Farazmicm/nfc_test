@@ -48,6 +48,10 @@ public class LoginActivity extends AppCompatActivity {
         txUserName = findViewById(R.id.editTextUserName);
         txPassword = findViewById(R.id.editTextPassword);
         edtCaptcha = findViewById(R.id.edtCaptcha);
+
+//        txUserName.setText("CHSH250187");
+//        txPassword.setText("Pass@1234");
+//        edtCaptcha.setText("1234");
         webService = new WebService();
         schoolGroupName = findViewById(R.id.schoolGroupName);
         btnChangeSchoolGroup = findViewById(R.id.changeSchoolGroup);
@@ -156,7 +160,7 @@ public class LoginActivity extends AppCompatActivity {
         captchaImage = (AppCompatImageView) findViewById(R.id.imageCaptcha);
 
         LoadCaptchaImage();
-
+//        ResetCaptchaImage();
         findViewById(R.id.btnRefreshCaptcha).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

@@ -2253,10 +2253,52 @@ public class GenActivity extends AppCompatActivity {
 
                                 data.setParentRFIDs(parentRFIDs);
                             }
-
                             if ((data.getUserName() != null && !data.getUserName().isEmpty()) || !data.getUserName().equalsIgnoreCase("mobileverifieduser")) {
                                 participantJsonList.add(data);
                             }
+                        }
+
+
+                        finaluserDetailsResults = participantJsonList;
+//                    }
+                        //StudentDataCall.this.student_data.setText("Total: " + participantJsonList.size());
+
+                        SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), MODE_PRIVATE);
+                        SharedPreferences.Editor myEdit = sharedPreferences.edit();
+                        myEdit.putString(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), jsonArr.toString());
+                        myEdit.apply();
+
+                        if (isShowStudentData) {
+                            listener = new ClickListener() {
+                                @Override
+                                public void click(int index, UserDetailsResult detailsResult) {
+                                    try {
+                                        if (!detailsResult.getRFIDNumbers().isEmpty()) {
+                                            if (Utility.checkInternet(GenActivity.this)) {
+                                                String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
+                                                new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                                            } else {
+                                                Utility.openInternetNotAvailable(GenActivity.this, "");
+                                            }
+                                        }
+                                    } catch (Exception ex) {
+                                        if (!MyVariables.IsProduction) {
+                                            Log.e("Error:WebCall", ex.toString());
+                                        }
+                                    }
+                                }
+                            };
+                            recyclerViewBind = new StudentDataRecyclerViewBind(finaluserDetailsResults, getApplication(), listener);
+                            recyclerView.setAdapter(recyclerViewBind);
+                            recyclerView.setLayoutManager(new LinearLayoutManager(GenActivity.this));
+                            recyclerView.setVisibility(View.VISIBLE);
+                            lblDataTitle.setVisibility(View.VISIBLE);
+                            lySearchContainer.setVisibility(View.VISIBLE);
+                            isShowStudentData = false;
+                        } else {
+                            recyclerView.setVisibility(View.GONE);
+                            lblDataTitle.setVisibility(View.GONE);
+                            lySearchContainer.setVisibility(View.GONE);
                         }
                     } catch (JSONException e) {
                         e.printStackTrace();
@@ -2266,14 +2308,7 @@ public class GenActivity extends AppCompatActivity {
 //                    participantJsonList = JsonList;
 //                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
 //                        participantJsonList.removeIf(filter -> filter.UserName.equalsIgnoreCase("mobileverifieduser") || Objects.equals(filter.getUserName(), "") || filter.getUserName() == null);
-                    finaluserDetailsResults = participantJsonList;
-//                    }
-                    //StudentDataCall.this.student_data.setText("Total: " + participantJsonList.size());
 
-                    SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), MODE_PRIVATE);
-                    SharedPreferences.Editor myEdit = sharedPreferences.edit();
-                    myEdit.putString(MyVariables.DEFAULT_ENUM.ALL_USER_DATA.toString(), jsonArr.toString());
-                    myEdit.apply();
                     //StudentData.this.student_data.append(result);
 
                /*StudentDataAdapter adapter = new StudentDataAdapter(getApplicationContext(), R.id.title, participantJsonList);
@@ -2283,38 +2318,6 @@ public class GenActivity extends AppCompatActivity {
                ((Button) findViewById(R.id.buttonShowData)).setVisibility(View.VISIBLE); */
 
 
-                    if (isShowStudentData) {
-                        listener = new ClickListener() {
-                            @Override
-                            public void click(int index, UserDetailsResult detailsResult) {
-                                try {
-                                    if (!detailsResult.getRFIDNumbers().isEmpty()) {
-                                        if (Utility.checkInternet(GenActivity.this)) {
-                                            String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
-                                            new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
-                                        } else {
-                                            Utility.openInternetNotAvailable(GenActivity.this, "");
-                                        }
-                                    }
-                                } catch (Exception ex) {
-                                    if (!MyVariables.IsProduction) {
-                                        Log.e("Error:WebCall", ex.toString());
-                                    }
-                                }
-                            }
-                        };
-                        recyclerViewBind = new StudentDataRecyclerViewBind(finaluserDetailsResults, getApplication(), listener);
-                        recyclerView.setAdapter(recyclerViewBind);
-                        recyclerView.setLayoutManager(new LinearLayoutManager(GenActivity.this));
-                        recyclerView.setVisibility(View.VISIBLE);
-                        lblDataTitle.setVisibility(View.VISIBLE);
-                        lySearchContainer.setVisibility(View.VISIBLE);
-                        isShowStudentData = false;
-                    } else {
-                        recyclerView.setVisibility(View.GONE);
-                        lblDataTitle.setVisibility(View.GONE);
-                        lySearchContainer.setVisibility(View.GONE);
-                    }
                 }
             } catch (Exception ex) {
                 if (!MyVariables.IsProduction) {
