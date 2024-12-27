@@ -28,9 +28,9 @@
             android:orientation="vertical">
 
             <LinearLayout
+                android:id="@+id/header_layout"
                 android:layout_width="match_parent"
-                android:layout_height="70dp"
-                android:background="@color/teal_700">
+                android:layout_height="70dp">
 
                 <com.google.android.material.imageview.ShapeableImageView
                     android:id="@+id/usrImage"
@@ -46,7 +46,6 @@
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="1"
-                    android:background="@color/teal_700"
                     android:gravity="left|center_vertical"
                     android:text="dfdssfdfd"
                     android:textColor="@color/white"

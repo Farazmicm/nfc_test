@@ -51,6 +51,19 @@ public class StudentDataRecyclerViewBind extends RecyclerView.Adapter<StudentDat
         final int index = viewHolder.getAdapterPosition();
         UserDetailsResult userDetailsResult = list.get(position);
         try {
+            if(userDetailsResult.getUserType().equalsIgnoreCase("student")){
+                viewHolder.headerLayout.setBackgroundColor(context.getResources().getColor(R.color.teal_700));
+                viewHolder.txtUserFullName.setBackgroundColor(context.getResources().getColor(R.color.teal_700));
+                viewHolder.btnTapForAtt.setTextColor(context.getResources().getColor(R.color.teal_700));
+            }else if(userDetailsResult.getUserType().equalsIgnoreCase("parent")){
+                viewHolder.headerLayout.setBackgroundColor(context.getResources().getColor(R.color.red));
+                viewHolder.txtUserFullName.setBackgroundColor(context.getResources().getColor(R.color.red));
+                viewHolder.btnTapForAtt.setTextColor(context.getResources().getColor(R.color.red));
+            }else{
+                viewHolder.headerLayout.setBackgroundColor(context.getResources().getColor(R.color.blue));
+                viewHolder.txtUserFullName.setBackgroundColor(context.getResources().getColor(R.color.blue));
+                viewHolder.btnTapForAtt.setTextColor(context.getResources().getColor(R.color.blue));
+            }
             if (userDetailsResult.getUserFullName() == null && userDetailsResult.getUserFullName().isEmpty()) {
                 viewHolder.txtUserFullName.setVisibility(View.GONE);
             } else {

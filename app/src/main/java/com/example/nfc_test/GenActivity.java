@@ -95,6 +95,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Random;
 
 public class GenActivity extends AppCompatActivity {
 
@@ -1685,7 +1686,7 @@ public class GenActivity extends AppCompatActivity {
                     }
                 }
                 if (isRefIdAvailable) {
-                    strCardNumber = secondCardNumber;
+                    strCardNumber = firstCardNumber;
                     callAttendancePushCallApi();
                 } else {
                     showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
@@ -2164,8 +2165,9 @@ public class GenActivity extends AppCompatActivity {
         public String doInBackground(String... str) {
             Map<String, String> params = new HashMap<String, String>();
             params.put("DeviceType", deviceType);
+            Random r = new Random();
 
-            String result = webService.sendWebRequest(getApplicationContext(), "/ExternalAPI/GetAllUsers?DeviceType=" + deviceType, Request.Method.GET, params, new VolleyCallback() {
+            String result = webService.sendWebRequest(getApplicationContext(), "/ExternalAPI/GetAllUsers?DeviceType=" + deviceType+"&_c="+ r.nextInt(), Request.Method.GET, params, new VolleyCallback() {
                 @Override
                 public void onSuccess(String result) {
                     StudentDataCall.this.setResultData(result);

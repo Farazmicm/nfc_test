@@ -2,12 +2,12 @@ package com.example.nfc_test;
 
 import android.view.View;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.nfc_test.R;
 import com.google.android.material.imageview.ShapeableImageView;
 
 public class StudentDataViewHolder extends RecyclerView.ViewHolder{
@@ -15,6 +15,7 @@ public class StudentDataViewHolder extends RecyclerView.ViewHolder{
     TextView txtUserFullName,txtUserID,txtClassDiv,txtContactNumber,txtCardNumbers,txtDeniedMsg,tvCardNo;
     Button btnTapForAtt;
     ShapeableImageView usrImage;
+    LinearLayout headerLayout;
 
     public StudentDataViewHolder(@NonNull View itemView) {
         super(itemView);
@@ -27,6 +28,7 @@ public class StudentDataViewHolder extends RecyclerView.ViewHolder{
         usrImage = (ShapeableImageView)itemView.findViewById(R.id.usrImage);
         txtDeniedMsg = (TextView) itemView.findViewById(R.id.txtDeniedMsg);
         tvCardNo = (TextView) itemView.findViewById(R.id.txtCardNumber);
+        headerLayout = (LinearLayout) itemView.findViewById(R.id.header_layout);
         view = itemView;
     }
 }

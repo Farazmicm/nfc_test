@@ -1,6 +1,7 @@
 package com.example.nfc_test;
 
 import android.view.View;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -13,6 +14,7 @@ public class ScannedDataViewHolder extends RecyclerView.ViewHolder{
     View view;
     TextView sc_txtUserFullName,sc_txtClassDiv,sc_txtCardNumbers,sc_txtDeniedMsg,sc_datetime,sc_txtStatus;
     ShapeableImageView sc_usrImage;
+    LinearLayout headerLayout;
 
     public ScannedDataViewHolder(@NonNull View itemView) {
         super(itemView);
@@ -23,6 +25,7 @@ public class ScannedDataViewHolder extends RecyclerView.ViewHolder{
         sc_usrImage = (ShapeableImageView)itemView.findViewById(R.id.sc_usrImage);
         sc_txtDeniedMsg = (TextView) itemView.findViewById(R.id.sc_txtDeniedMsg);
         sc_txtStatus = (TextView) itemView.findViewById(R.id.sc_txtStatus);
+        headerLayout = (LinearLayout) itemView.findViewById(R.id.header_layout);
         view = itemView;
     }
 }

@@ -10,4 +10,6 @@
     <color name="solidCircle">#AAFFFFFF</color>
     <color name="circleBorder">#50FFFFFF</color>
     <color name="grey">#808080</color>
+    <color name="red">#C51E44</color>
+    <color name="blue">#0357B4</color>
 </resources>

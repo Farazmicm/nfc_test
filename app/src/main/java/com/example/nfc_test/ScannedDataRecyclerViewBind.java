@@ -52,6 +52,23 @@ public class ScannedDataRecyclerViewBind extends RecyclerView.Adapter<ScannedDat
         UserDetailsResult userDetailsResult = scannedUserDetailsResult.userDetailsResult;
         viewHolder.sc_txtUserFullName.setText(userDetailsResult.getUserFullName());
 
+        if(scannedUserDetailsResult.userDetailsResult.getUserType().equalsIgnoreCase("student")){
+            viewHolder.headerLayout.setBackgroundColor(context.getResources().getColor(R.color.teal_700));
+            viewHolder.sc_txtUserFullName.setBackgroundColor(context.getResources().getColor(R.color.teal_700));
+            viewHolder.sc_txtClassDiv.setBackgroundColor(context.getResources().getColor(R.color.teal_700));
+            viewHolder.sc_txtStatus.setBackgroundColor(context.getResources().getColor(R.color.teal_700));
+        }else if(scannedUserDetailsResult.userDetailsResult.getUserType().equalsIgnoreCase("parent")){
+            viewHolder.headerLayout.setBackgroundColor(context.getResources().getColor(R.color.red));
+            viewHolder.sc_txtUserFullName.setBackgroundColor(context.getResources().getColor(R.color.red));
+            viewHolder.sc_txtClassDiv.setBackgroundColor(context.getResources().getColor(R.color.red));
+            viewHolder.sc_txtStatus.setBackgroundColor(context.getResources().getColor(R.color.red));
+        }else{
+            viewHolder.headerLayout.setBackgroundColor(context.getResources().getColor(R.color.blue));
+            viewHolder.sc_txtUserFullName.setBackgroundColor(context.getResources().getColor(R.color.blue));
+            viewHolder.sc_txtClassDiv.setBackgroundColor(context.getResources().getColor(R.color.blue));
+            viewHolder.sc_txtStatus.setBackgroundColor(context.getResources().getColor(R.color.blue));
+        }
+
         if(userDetailsResult.getClassName().isEmpty()){
             viewHolder.sc_txtClassDiv.setText("");
         }else{
