@@ -222,7 +222,8 @@ public class GenActivity extends AppCompatActivity {
             } else {
                 reading_data.setText("Tap Master Card to Proceed for attendance");
             }
-            checkUserRFIDAvailable();
+//            checkUserRFIDAvailable();
+            clearRFID();
 
             if (!MyVariables.lstScannedUsers.isEmpty()) {
                 displayScannedDetails();
@@ -1376,7 +1377,7 @@ public class GenActivity extends AppCompatActivity {
                                         SharedPreferences.Editor myEdit = sharedPreferences.edit();
                                         myEdit.putString(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), newStrCardNumber);
                                         myEdit.apply();
-                                        showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
+                                        showAddAnotherUserPopup(newStrCardNumber, "Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
                                     } else {
                                         strCardNumber = newStrCardNumber;
                                         callAttendancePushCallApi();
@@ -1689,10 +1690,10 @@ public class GenActivity extends AppCompatActivity {
                     strCardNumber = firstCardNumber;
                     callAttendancePushCallApi();
                 } else {
-                    showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
+                    showAddAnotherUserPopup(firstCardNumber, "Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
                 }
             } else {
-                showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
+                showAddAnotherUserPopup(firstCardNumber, "Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
             }
             return this.strCardNumber;
         }
@@ -2035,6 +2036,55 @@ public class GenActivity extends AppCompatActivity {
             }
         }
 
+        void showAddAnotherUserPopup(String newStrCardNumber, String msg) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (!tapAlertDialog.isShowing())
+                        tapAlertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), msg);
+
+                    assert tapAlertDialog != null;
+                    tapAlertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Cancel", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface arg0, int arg1) {
+                            clearRFID();
+                        }
+                    });
+                    tapAlertDialog.setButton(DialogInterface.BUTTON_NEGATIVE, "Manual Authorize", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface arg0, int arg1) {
+                            strCardNumber = newStrCardNumber;
+                            new Thread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    clearRFID();
+                                    // Background operation
+                                    callAttendancePushCallApi();
+                                }
+                            }).start();
+//                            Handler mainHandler = new Handler(GenActivity.this.getMainLooper());
+//                            Runnable myRunnable = new Runnable() {
+//                                @Override
+//                                public void run() {
+//                                 callAttendancePushCallApi();
+//                                }
+//                            };
+//                            mainHandler.post(myRunnable);
+
+                        }
+                    });
+                    tapAlertDialog.setCancelable(false);
+                    tapAlertDialog.setOnKeyListener((dialog, keyCode, event) -> {
+                        if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
+                            // Handle the back button press here
+                            return true; // Indicate that the event is handled
+                        }
+                        return false;
+                    });
+                    tapAlertDialog.show();
+                }
+            });
+        }
 
         public void doStudentVerification() {
             try {
@@ -2167,12 +2217,15 @@ public class GenActivity extends AppCompatActivity {
             params.put("DeviceType", deviceType);
             Random r = new Random();
 
-            String result = webService.sendWebRequest(getApplicationContext(), "/ExternalAPI/GetAllUsers?DeviceType=" + deviceType+"&_c="+ r.nextInt(), Request.Method.GET, params, new VolleyCallback() {
+            String result = webService.sendWebRequest(getApplicationContext(), "/ExternalAPI/GetAllUsers?DeviceType=" + deviceType + "&_c=" + r.nextInt(), Request.Method.GET, params, new VolleyCallback() {
                 @Override
                 public void onSuccess(String result) {
-                    StudentDataCall.this.setResultData(result);
-                    if (!MyVariables.IsProduction) {
-                        Log.i("Api Data", result);
+                    try {
+                        StudentDataCall.this.setResultData(result);
+                        if (!MyVariables.IsProduction) {
+                            Log.i("Api Data", result);
+                        }
+                    }catch (Exception e){
                     }
                 }
             });
@@ -2220,6 +2273,8 @@ public class GenActivity extends AppCompatActivity {
                                 data.setUserName(jsonObj.getString("UserName"));
                             if (jsonObj.has("UserFullName"))
                                 data.setUserFullName(jsonObj.getString("UserFullName"));
+                            if (jsonObj.has("UserProfileImage"))
+                                data.setUserProfileImage(jsonObj.getString("UserProfileImage"));
                             if (jsonObj.has("ContactNo"))
                                 data.setContactNo(jsonObj.getString("ContactNo"));
                             if (jsonObj.has("UID")) data.setUID(jsonObj.getString("UID"));
@@ -2240,7 +2295,7 @@ public class GenActivity extends AppCompatActivity {
                             if (jsonObj.has("IsParentRFIDCheckRequired"))
                                 data.setParentRFIDCheckRequired(jsonObj.getBoolean("IsParentRFIDCheckRequired"));
 
-                            if(jsonObj.has("ParentRFIDs")){
+                            if (jsonObj.has("ParentRFIDs")) {
                                 JSONArray arr = jsonObj.getJSONArray("ParentRFIDs");
                                 List<ParentRFID> parentRFIDs = new ArrayList<ParentRFID>();
                                 for (int k = 0; k < arr.length(); k++) {
@@ -2329,6 +2384,7 @@ public class GenActivity extends AppCompatActivity {
             }
         }
     }
+
     //TODO card read
     private class StudentAttendancePushCall extends AsyncTask<String, Void, Void> {
         ProgressDialog progressDialog;
@@ -2772,6 +2828,8 @@ public class GenActivity extends AppCompatActivity {
                                 data.setUserName(jsonObj.getString("UserName"));
                             if (jsonObj.has("UserFullName"))
                                 data.setUserFullName(jsonObj.getString("UserFullName"));
+                            if (jsonObj.has("UserProfileImage"))
+                                data.setUserProfileImage(jsonObj.getString("UserProfileImage"));
                             if (jsonObj.has("ContactNo"))
                                 data.setContactNo(jsonObj.getString("ContactNo"));
                             if (jsonObj.has("UID")) data.setUID(jsonObj.getString("UID"));
@@ -3484,45 +3542,19 @@ public class GenActivity extends AppCompatActivity {
         return Environment.MEDIA_MOUNTED_READ_ONLY.equals(extStorageState);
     }
 
-    void showAddAnotherUserPopup(String msg) {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                if (!tapAlertDialog.isShowing())
-                    tapAlertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), msg);
 
-                assert tapAlertDialog != null;
-                tapAlertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Cancel", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface arg0, int arg1) {
-                        clearRFID();
-                    }
-                });
-                tapAlertDialog.setCancelable(false);
-                tapAlertDialog.setOnKeyListener((dialog, keyCode, event) -> {
-                    if (keyCode == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
-                        // Handle the back button press here
-                        return true; // Indicate that the event is handled
-                    }
-                    return false;
-                });
-                tapAlertDialog.show();
-            }
-        });
-    }
-
-    void checkUserRFIDAvailable() {
-        SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), MODE_PRIVATE);
-        String getStudentRFID = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), "");
-        if (!getStudentRFID.isEmpty()) {
-            UserDetailsResult detailsResult = findUserFromList(getStudentRFID);
-            if (!detailsResult.getRFIDNumbers().isEmpty()) {
-                showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
-            } else {
-                Toast.makeText(GenActivity.this, "\"Please use Valid Card", Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
+//    void checkUserRFIDAvailable() {
+//        SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), MODE_PRIVATE);
+//        String getStudentRFID = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), "");
+//        if (!getStudentRFID.isEmpty()) {
+//            UserDetailsResult detailsResult = findUserFromList(getStudentRFID);
+//            if (!detailsResult.getRFIDNumbers().isEmpty()) {
+//                showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
+//            } else {
+//                Toast.makeText(GenActivity.this, "\"Please use Valid Card", Toast.LENGTH_SHORT).show();
+//            }
+//        }
+//    }
 
     void clearRFID() {
         SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.USER_RFID.toString(), MODE_PRIVATE);

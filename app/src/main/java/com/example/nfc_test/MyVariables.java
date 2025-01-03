@@ -125,6 +125,7 @@ public class MyVariables extends Application {
     public static String DEVICE_TYPE = "CAR"; //CAR or GATE
 
     public static final String namespace = "http://tempuri.org/";
+    public static final String imageFileHostPath = "?imageFileHostedPath=";
 
     public void onCreate() {
         super.onCreate();

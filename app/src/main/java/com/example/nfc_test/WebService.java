@@ -50,9 +50,12 @@ class WebService {
         mStringRequest = new StringRequest(methodType, oFinalURl, new Response.Listener<String>() {
             @Override
             public void onResponse(String response) {
-                responseData = response.toString();
-                callback.onSuccess(response.toString());
+                try {
+                    responseData = response.toString();
+                    callback.onSuccess(response.toString());
+                }catch (Exception e){
 
+                }
             }
         }, new Response.ErrorListener() {
             @Override

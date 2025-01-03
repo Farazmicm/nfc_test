@@ -70,5 +70,7 @@ dependencies {
     implementation libs.jackson.annotations
     implementation libs.rootbeer.lib
     implementation libs.opencsv
+    implementation libs.glide.v4120
+    annotationProcessor libs.compiler.v4120
 //    //compile files('libs/ksoap2-android-assembly-3.1.1-jar-with-dependencie
 }

@@ -1,5 +1,7 @@
 package com.example.nfc_test;
 
+import static com.example.nfc_test.MyVariables.SCHOOL_GROUP_CODE;
+
 import android.content.Context;
 import android.text.Html;
 import android.view.LayoutInflater;
@@ -9,7 +11,6 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-//import com.example.nfc_test.R;
 import com.example.nfc_test.models.UserDetailsResult;
 
 import java.util.Arrays;
@@ -51,15 +52,15 @@ public class StudentDataRecyclerViewBind extends RecyclerView.Adapter<StudentDat
         final int index = viewHolder.getAdapterPosition();
         UserDetailsResult userDetailsResult = list.get(position);
         try {
-            if(userDetailsResult.getUserType().equalsIgnoreCase("student")){
+            if (userDetailsResult.getUserType().equalsIgnoreCase("student")) {
                 viewHolder.headerLayout.setBackgroundColor(context.getResources().getColor(R.color.teal_700));
                 viewHolder.txtUserFullName.setBackgroundColor(context.getResources().getColor(R.color.teal_700));
                 viewHolder.btnTapForAtt.setTextColor(context.getResources().getColor(R.color.teal_700));
-            }else if(userDetailsResult.getUserType().equalsIgnoreCase("parent")){
+            } else if (userDetailsResult.getUserType().equalsIgnoreCase("parent")) {
                 viewHolder.headerLayout.setBackgroundColor(context.getResources().getColor(R.color.red));
                 viewHolder.txtUserFullName.setBackgroundColor(context.getResources().getColor(R.color.red));
                 viewHolder.btnTapForAtt.setTextColor(context.getResources().getColor(R.color.red));
-            }else{
+            } else {
                 viewHolder.headerLayout.setBackgroundColor(context.getResources().getColor(R.color.blue));
                 viewHolder.txtUserFullName.setBackgroundColor(context.getResources().getColor(R.color.blue));
                 viewHolder.btnTapForAtt.setTextColor(context.getResources().getColor(R.color.blue));
@@ -103,7 +104,8 @@ public class StudentDataRecyclerViewBind extends RecyclerView.Adapter<StudentDat
                 viewHolder.tvCardNo.setVisibility(View.VISIBLE);
             }
 
-        }catch (Exception e){}
+        } catch (Exception e) {
+        }
 
         /*if(!userDetailsResult.getUserProfileImage().isEmpty()){
             String imgUrl = MyVariables.SCHOOL_WEB_URL + "/" + MyVariables.SCHOOL_GROUP_CODE + "?imageFileHostedPath="+userDetailsResult.getUserProfileImage();
@@ -130,21 +132,46 @@ public class StudentDataRecyclerViewBind extends RecyclerView.Adapter<StudentDat
             }
         }
         */
-        if (userDetailsResult.isDenied()) {
-            viewHolder.txtDeniedMsg.setText(userDetailsResult.getDeniedReason());
-            viewHolder.txtDeniedMsg.setVisibility(View.VISIBLE);
-            viewHolder.btnTapForAtt.setVisibility(View.GONE);
+        if (SCHOOL_GROUP_CODE != null && SCHOOL_GROUP_CODE.contains("dais")) {
+            if (userDetailsResult.isDenied()) {
+                viewHolder.txtDeniedMsg.setText(userDetailsResult.getDeniedReason());
+                viewHolder.txtDeniedMsg.setVisibility(View.VISIBLE);
+                viewHolder.btnTapForAtt.setVisibility(View.GONE);
+            } else {
+                viewHolder.btnTapForAtt.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        listener.click(index, userDetailsResult);
+                    }
+                });
+                viewHolder.btnTapForAtt.setVisibility(View.VISIBLE);
+                viewHolder.txtDeniedMsg.setVisibility(View.GONE);
+            }
         } else {
-
-            viewHolder.btnTapForAtt.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    listener.click(index, userDetailsResult);
-                }
-            });
-            viewHolder.btnTapForAtt.setVisibility(View.VISIBLE);
-            viewHolder.txtDeniedMsg.setVisibility(View.GONE);
+            if (userDetailsResult.isDenied() || userDetailsResult.DeniedReason != null) {
+                viewHolder.txtDeniedMsg.setText(userDetailsResult.getDeniedReason());
+                viewHolder.txtDeniedMsg.setVisibility(View.VISIBLE);
+            } else {
+                viewHolder.btnTapForAtt.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        listener.click(index, userDetailsResult);
+                    }
+                });
+                viewHolder.txtDeniedMsg.setVisibility(View.GONE);
+            }
         }
+
+//        String imageFullPath = MyVariables.SCHOOL_WEB_URL+imageFileHostPath+userDetailsResult.getUserProfileImage();
+//        Log.e("image2",imageFullPath);
+//        try {
+//            if (!userDetailsResult.getUserProfileImage().isEmpty()) {
+//                Glide.with(context).load(imageFullPath).
+//                        placeholder(R.drawable.sample_user).error(R.drawable.sample_user).into(viewHolder.usrImage);
+//            }
+//        } catch (Exception e) {
+//
+//        }
     }
 
     @Override
