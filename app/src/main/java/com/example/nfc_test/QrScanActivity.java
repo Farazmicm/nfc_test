@@ -17,6 +17,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.hardware.Camera;
 import android.location.Location;
 import android.location.LocationManager;
 import android.net.Uri;
@@ -29,17 +30,21 @@ import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.text.Editable;
 import android.text.Html;
 import android.text.TextWatcher;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.KeyEvent;
-import android.view.Menu;
 import android.view.MenuItem;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.Spinner;
@@ -75,6 +80,10 @@ import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.vision.CameraSource;
+import com.google.android.gms.vision.Detector;
+import com.google.android.gms.vision.barcode.Barcode;
+import com.google.android.gms.vision.barcode.BarcodeDetector;
 import com.google.android.material.chip.ChipGroup;
 import com.google.gson.Gson;
 import com.opencsv.CSVWriter;
@@ -86,6 +95,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -97,7 +107,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 
-public class GenActivity extends AppCompatActivity {
+public class QrScanActivity extends AppCompatActivity {
 
     boolean flag = false;
     IntentFilter[] intentFiltersArray;
@@ -148,14 +158,23 @@ public class GenActivity extends AppCompatActivity {
     private static final int REQUEST_PERMISSION_CODE = 1;
     private static final int REQUEST_CODE_MANAGE_EXTERNAL_STORAGE = 101;
     AlertDialog tapAlertDialog;
-    ;
+    private static final int CAMERA_PERMISSION_CODE = 201;
+    SurfaceView surfaceView;
+    private BarcodeDetector barcodeDetector;
+    private CameraSource cameraSource;
+    Handler handler = new Handler(Looper.getMainLooper());
+    private int cameraFacing = CameraSource.CAMERA_FACING_BACK;
+    private boolean isFlashOn = false;
+    private ImageButton flashToggleButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_gen);
-        db = new DatabaseHandler(GenActivity.this);
-        tapAlertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "");
+        setContentView(R.layout.activity_qr_scan);
+        db = new DatabaseHandler(QrScanActivity.this);
+        tapAlertDialog = MyVariables.getDefaultDialog(QrScanActivity.this, getResources().getString(R.string.app_name), "");
+        surfaceView = findViewById(R.id.surfaceView);
+
 ////        db.deleteAttendanceAllRecords();
 //        Gson gson = new Gson();
 //        List<UserAttendanceExternalAPIVM> externalAPIVMList = new ArrayList<UserAttendanceExternalAPIVM>();
@@ -176,16 +195,21 @@ public class GenActivity extends AppCompatActivity {
         getScannedAttendanceList();
 //      getScannedAttendanceLogList();
 
-        toolbar = findViewById(R.id.toolbar);
+        toolbar = findViewById(R.id.qr_toolbar);
         setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true); // Show the back button
+            getSupportActionBar().setDisplayShowHomeEnabled(true); // Optional
+        }
+
 
         try {
             this.nfcAdapter = NfcAdapter.getDefaultAdapter(this);
-            this.pendingIntent = PendingIntent.getActivity(GenActivity.this, 0, new Intent(GenActivity.this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_MUTABLE);
+            this.pendingIntent = PendingIntent.getActivity(QrScanActivity.this, 0, new Intent(QrScanActivity.this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_MUTABLE);
             this.intentFiltersArray = new IntentFilter[]{new IntentFilter("android.nfc.action.TECH_DISCOVERED")};
             this.techListsArray = new String[][]{new String[]{NfcA.class.getName()}, new String[]{MifareClassic.class.getName()}};
-            this.resetMCard = findViewById(R.id.resetMCard);
-            this.api_data = findViewById(R.id.api_data);
+//            this.resetMCard = findViewById(R.id.resetMCard);
+//            this.api_data = findViewById(R.id.api_data);
             this.reading_data = findViewById(R.id.reading_data);
             recyclerView = (RecyclerView) findViewById(R.id.rcvStudentData);
             this.lySearchContainer = findViewById(R.id.lySearchContainer);
@@ -198,16 +222,16 @@ public class GenActivity extends AppCompatActivity {
             this.scannedRCV = (RecyclerView) findViewById(R.id.rcvScannedData);
 
             LinearLayout lnUserInformation = findViewById(R.id.lnUserInformation);
-            TextView scanned_data = findViewById(R.id.scanned_data);
             webService = new WebService();
 
             mToastHandler = new ToastHandler(this);
-            if (!MyVariables.USER_FULL_NAME.isEmpty()) {
-                String displayText = MyVariables.USER_FULL_NAME;
-                if (!MyVariables.deviceID.isEmpty())
-                    displayText += "\n(" + MyVariables.deviceID + ")";
-                ((TextView) findViewById(R.id.userName)).setText(displayText);
-            }
+
+//            if (!MyVariables.USER_FULL_NAME.isEmpty()) {
+//                String displayText = MyVariables.USER_FULL_NAME;
+//                if (!MyVariables.deviceID.isEmpty())
+//                    displayText += "\n(" + MyVariables.deviceID + ")";
+//                ((TextView) findViewById(R.id.userName)).setText(displayText);
+//            }
 
             SharedPreferences mSharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.ISDEFAULTMASTERCARDUSE.toString(), MODE_PRIVATE);
             String cardData = mSharedPreferences.getString(MyVariables.DEFAULT_ENUM.ISDEFAULTMASTERCARDUSE.toString(), "");
@@ -233,9 +257,9 @@ public class GenActivity extends AppCompatActivity {
                 public void onClick(View view) {
 
                     //MyVariables.CARD_AUTH_KEY == temp || MyVariables.SECTOR_NUMBER == 0
-                    if (Utility.checkInternet(GenActivity.this)) {
+                    if (Utility.checkInternet(QrScanActivity.this)) {
                         //isShowStudentData = true;
-                        new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
+                        new StudentDataCall(QrScanActivity.this, (StudentDataCall) null).execute();
                         //LinearLayout studentDataContainer = (LinearLayout) findViewById(R.id.studentDataContainer);
                         //studentDataContainer.setVisibility(View.VISIBLE);
                        /*if (studentDataContainer.getVisibility() == View.VISIBLE) {
@@ -244,15 +268,8 @@ public class GenActivity extends AppCompatActivity {
                            studentDataContainer.setVisibility(View.VISIBLE);
                        }*/
                     } else {
-                        Utility.openInternetNotAvailable(GenActivity.this, "");
+                        Utility.openInternetNotAvailable(QrScanActivity.this, "");
                     }
-                }
-            });
-
-            findViewById(R.id.fabQrScan).setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    startActivity(new Intent(GenActivity.this, QrScanActivity.class));
                 }
             });
 
@@ -294,59 +311,59 @@ public class GenActivity extends AppCompatActivity {
                }
            });*/
 
-            busSwitch = findViewById(R.id.busSwitch);
-            gateSwitch = findViewById(R.id.gateSwitch);
-            SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.DEVICE_TYPE.toString(), MODE_PRIVATE);
-            String dType = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.DEVICE_TYPE.toString(), "");
-            deviceType = !dType.isEmpty() ? dType : "bus";
-            saveDeviceType();
+//            busSwitch = findViewById(R.id.busSwitch);
+//            gateSwitch = findViewById(R.id.gateSwitch);
+//            SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.DEVICE_TYPE.toString(), MODE_PRIVATE);
+//            String dType = sharedPreferences.getString(MyVariables.DEFAULT_ENUM.DEVICE_TYPE.toString(), "");
+//            deviceType = !dType.isEmpty() ? dType : "bus";
+//            saveDeviceType();
+//
+//            if (Objects.equals(deviceType, "bus")) {
+//                busSwitch.setChecked(true);
+//            } else {
+//                gateSwitch.setChecked(true);
+//            }
+//
+//            busSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+//                if (Utility.checkInternet(QrScanActivity.this)) {
+//                    if (isChecked) {
+//                        deviceType = "bus";
+//                        gateSwitch.setChecked(false);
+//                        saveDeviceType();
+//                    } else {
+//                        deviceType = "gate";
+//                        gateSwitch.setChecked(true);
+//                        saveDeviceType();
+//                    }
+//                    new StudentDataCall(QrScanActivity.this, (StudentDataCall) null).execute();
+//                } else {
+//                    busSwitch.setChecked(!isChecked);
+//                    Utility.openInternetNotAvailable(QrScanActivity.this, "");
+//                }
+//            });
+//
+//            gateSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+//                if (Utility.checkInternet(QrScanActivity.this)) {
+//                    if (isChecked) {
+//                        deviceType = "gate";
+//                        busSwitch.setChecked(false);
+//                        saveDeviceType();
+//                    } else {
+//                        deviceType = "bus";
+//                        busSwitch.setChecked(true);
+//                        saveDeviceType();
+//                    }
+//                    new StudentDataCall(QrScanActivity.this, (StudentDataCall) null).execute();
+//                } else {
+//                    gateSwitch.setChecked(!isChecked);
+//                    Utility.openInternetNotAvailable(QrScanActivity.this, "");
+//                }
+//            });
 
-            if (Objects.equals(deviceType, "bus")) {
-                busSwitch.setChecked(true);
-            } else {
-                gateSwitch.setChecked(true);
-            }
-
-            busSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (Utility.checkInternet(GenActivity.this)) {
-                    if (isChecked) {
-                        deviceType = "bus";
-                        gateSwitch.setChecked(false);
-                        saveDeviceType();
-                    } else {
-                        deviceType = "gate";
-                        gateSwitch.setChecked(true);
-                        saveDeviceType();
-                    }
-                    new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
-                } else {
-                    busSwitch.setChecked(!isChecked);
-                    Utility.openInternetNotAvailable(GenActivity.this, "");
-                }
-            });
-
-            gateSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                if (Utility.checkInternet(GenActivity.this)) {
-                    if (isChecked) {
-                        deviceType = "gate";
-                        busSwitch.setChecked(false);
-                        saveDeviceType();
-                    } else {
-                        deviceType = "bus";
-                        busSwitch.setChecked(true);
-                        saveDeviceType();
-                    }
-                    new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
-                } else {
-                    gateSwitch.setChecked(!isChecked);
-                    Utility.openInternetNotAvailable(GenActivity.this, "");
-                }
-            });
-
-            if (Utility.checkInternet(GenActivity.this)) {
+            if (Utility.checkInternet(QrScanActivity.this)) {
                 new StudentDataCall(this, (StudentDataCall) null).execute();
             } else {
-                Utility.openInternetNotAvailable(GenActivity.this, "");
+                Utility.openInternetNotAvailable(QrScanActivity.this, "");
             }
 
             try {
@@ -369,10 +386,10 @@ public class GenActivity extends AppCompatActivity {
 //                    //Log.v("Selected chipGroup", selectedCHip.getText() + "");
 //                    deviceType = selectedCHip.getText().toString().toLowerCase();
 //
-//                   if (Utility.checkInternet(GenActivity.this)) {
-//                        new GenActivity.StudentDataCall(GenActivity.this, (GenActivity.StudentDataCall) null).execute();
+//                   if (Utility.checkInternet(QrScanActivity.this)) {
+//                        new QrScanActivity.StudentDataCall(QrScanActivity.this, (QrScanActivity.StudentDataCall) null).execute();
 //                    } else {
-//                        Utility.openInternetNotAvailable(GenActivity.this,"");
+//                        Utility.openInternetNotAvailable(QrScanActivity.this,"");
 //                    }
 //                }
 //            });
@@ -465,7 +482,7 @@ public class GenActivity extends AppCompatActivity {
                     // FusedLocationClient
                     // object
                     if (mFusedLocationClient == null) {
-                        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(GenActivity.this);
+                        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(QrScanActivity.this);
                     }
                     if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                         // TODO: Consider calling
@@ -587,17 +604,57 @@ public class GenActivity extends AppCompatActivity {
             } else {
                 // Permissions denied, handle accordingly (e.g., show a message to the user)
             }
+        } else if (requestCode == CAMERA_PERMISSION_CODE) {
+            if (grantResults.length > 0 &&
+                    grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                openCamera();
+            } else {
+                // Show rationale or go to settings
+                if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)) {
+                    showRationaleDialog();
+                } else {
+                    showSettingsRedirectDialog();
+                }
+            }
         }
     }
     //#endregion LocationCode
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.app_menu_container, menu);
-        return super.onCreateOptionsMenu(menu);
+    private void showRationaleDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Camera Permission Required")
+                .setMessage("<span style=color:black>" + "QR scanning needs camera access. Please allow it." + "</span>")
+                .setPositiveButton("Allow", (dialog, which) -> {
+                    dialog.dismiss();
+                    ActivityCompat.requestPermissions(QrScanActivity.this,
+                            new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_CODE);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
-    @Override
+    private void showSettingsRedirectDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Permission Denied")
+                .setMessage(Html.fromHtml("<span style=color:black>" + "Camera permission was permanently denied. Please allow it from settings." + "</span>"))
+                .setPositiveButton("Open Settings", (dialog, which) -> {
+                    dialog.dismiss();
+                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    Uri uri = Uri.fromParts("package", getPackageName(), null);
+                    intent.setData(uri);
+                    startActivity(intent);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+//    @Override
+//    public boolean onCreateOptionsMenu(Menu menu) {
+//        getMenuInflater().inflate(R.menu.app_menu_container, menu);
+//        return super.onCreateOptionsMenu(menu);
+//    }
+//
+//    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int itemId = item.getItemId();
         if (itemId == R.id.menu_logout) {
@@ -605,9 +662,9 @@ public class GenActivity extends AppCompatActivity {
         } else if (itemId == R.id.menu_info) {
             showUserInformation();
         } else if (itemId == R.id.view_student_data) {
-            if (Utility.checkInternet(GenActivity.this)) {
+            if (Utility.checkInternet(QrScanActivity.this)) {
                 isShowStudentData = true;
-                new StudentDataCall(GenActivity.this, (StudentDataCall) null).execute();
+                new StudentDataCall(QrScanActivity.this, (StudentDataCall) null).execute();
                 LinearLayout studentDataContainer = (LinearLayout) findViewById(R.id.studentDataContainer);
                 studentDataContainer.setVisibility(View.VISIBLE);
                        /*if (studentDataContainer.getVisibility() == View.VISIBLE) {
@@ -616,7 +673,7 @@ public class GenActivity extends AppCompatActivity {
                            studentDataContainer.setVisibility(View.VISIBLE);
                        }*/
             } else {
-                Utility.openInternetNotAvailable(GenActivity.this, "");
+                Utility.openInternetNotAvailable(QrScanActivity.this, "");
             }
         } else if (itemId == R.id.menu_setting) {
             AlertDialog alertDialog = MyVariables.getDefaultDialog(this, "", "Are you sure, you want to reset Master Card ?");
@@ -676,14 +733,17 @@ public class GenActivity extends AppCompatActivity {
                     if (isErrorDataAvailable) {
                         showAlert(this);
                     } else {
-                        Toast.makeText(GenActivity.this, "All Data Already Synced Successfully", Toast.LENGTH_LONG).show();
+                        Toast.makeText(QrScanActivity.this, "All Data Already Synced Successfully", Toast.LENGTH_LONG).show();
                     }
                 } else {
-                    Toast.makeText(GenActivity.this, "No data available for manual sync", Toast.LENGTH_LONG).show();
+                    Toast.makeText(QrScanActivity.this, "No data available for manual sync", Toast.LENGTH_LONG).show();
                 }
             } catch (Exception e) {
-                Toast.makeText(GenActivity.this, "No data available for manual sync", Toast.LENGTH_LONG).show();
+                Toast.makeText(QrScanActivity.this, "No data available for manual sync", Toast.LENGTH_LONG).show();
             }
+        } else if (item.getItemId() == android.R.id.home) {
+            getOnBackPressedDispatcher().onBackPressed(); // Modern way
+            return true;
         }
         return super.onOptionsItemSelected(item);
     }
@@ -706,10 +766,10 @@ public class GenActivity extends AppCompatActivity {
                     for (AttendanceModel attendance : db.getAllAttendanceList()) {
                         if (!attendance.getStatus().isEmpty() && attendance.getStatus().contains("Error")) {
                             //TODO Call Attendance manual Api
-                            if (Utility.checkInternet(GenActivity.this)) {
-                                new StudentManualAttendancePushCall(GenActivity.this, (StudentManualAttendancePushCall) null).execute(attendance);
+                            if (Utility.checkInternet(QrScanActivity.this)) {
+                                new StudentManualAttendancePushCall(QrScanActivity.this, (StudentManualAttendancePushCall) null).execute(attendance);
                             } else {
-                                Utility.openInternetNotAvailable(GenActivity.this, "");
+                                Utility.openInternetNotAvailable(QrScanActivity.this, "");
                                 break;
                             }
                             Log.e("attendance", attendance.getData());
@@ -752,7 +812,7 @@ public class GenActivity extends AppCompatActivity {
                     } catch (Exception e) {
 
                     } finally {
-                        GenActivity.this.findViewById(R.id.lnUserInformation).setVisibility(View.GONE);
+                        QrScanActivity.this.findViewById(R.id.lnUserInformation).setVisibility(View.GONE);
                     }
                 }
             };
@@ -799,10 +859,10 @@ public class GenActivity extends AppCompatActivity {
                 @Override
                 public void onClick(DialogInterface arg0, int arg1) {
 
-                    if (Utility.checkInternet(GenActivity.this)) {
-                        new LogoutCall(GenActivity.this, (LogoutCall) null).execute();
+                    if (Utility.checkInternet(QrScanActivity.this)) {
+                        new LogoutCall(QrScanActivity.this, (LogoutCall) null).execute();
                     } else {
-                        Utility.openInternetNotAvailable(GenActivity.this, "");
+                        Utility.openInternetNotAvailable(QrScanActivity.this, "");
                     }
                 }
             });
@@ -827,12 +887,13 @@ public class GenActivity extends AppCompatActivity {
         if (this.nfcAdapter != null) {
             this.nfcAdapter.disableForegroundDispatch(this);
         }
+        cameraSource.release();
     }
 
     public void onResume() {
         super.onResume();
-//        if (!Utility.checkInternet(GenActivity.this)) {
-//            Utility.openInternetNotAvailable(GenActivity.this, "");
+//        if (!Utility.checkInternet(QrScanActivity.this)) {
+//            Utility.openInternetNotAvailable(QrScanActivity.this, "");
 //            return;
 //        }
         if (this.nfcAdapter != null) {
@@ -840,32 +901,38 @@ public class GenActivity extends AppCompatActivity {
         }
 
         getLastLocation();
+        initialiseDetectorsAndSources();
+        if (surfaceView.getHolder().getSurface() != null && surfaceView.getHolder().getSurface().isValid()) {
+            openCamera();
+        } else {
+            Log.w("CameraActivity", "Surface not valid in onResume, waiting for surfaceCreated");
+        }
     }
 
-    @Override
-    public void onBackPressed() {
-
-        super.onBackPressed();
-        AlertDialog alertDialog = MyVariables.getDefaultDialog(this, getResources().getString(R.string.app_name), "Are you sure, you want to exit?");
-        assert alertDialog != null;
-        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Yes", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                finish();
-            }
-        });
-        alertDialog.setButton(DialogInterface.BUTTON_NEGATIVE, "No", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-
-            }
-        });
-        alertDialog.show();
-    }
+//    @Override
+//    public void onBackPressed() {
+//
+//        super.onBackPressed();
+//        AlertDialog alertDialog = MyVariables.getDefaultDialog(this, getResources().getString(R.string.app_name), "Are you sure, you want to exit?");
+//        assert alertDialog != null;
+//        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Yes", new DialogInterface.OnClickListener() {
+//            @Override
+//            public void onClick(DialogInterface dialog, int which) {
+//                finish();
+//            }
+//        });
+//        alertDialog.setButton(DialogInterface.BUTTON_NEGATIVE, "No", new DialogInterface.OnClickListener() {
+//            @Override
+//            public void onClick(DialogInterface dialog, int which) {
+//
+//            }
+//        });
+//        alertDialog.show();
+//    }
 
     public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        new KeyGenerator(GenActivity.this, (KeyGenerator) null).execute(new Intent[]{intent});
+        new KeyGenerator(QrScanActivity.this, (KeyGenerator) null).execute(new Intent[]{intent});
     }
 
 
@@ -878,11 +945,11 @@ public class GenActivity extends AppCompatActivity {
                     public void click(int index, UserDetailsResult detailsResult) {
                         try {
                             if (!detailsResult.getRFIDNumbers().isEmpty()) {
-                                if (Utility.checkInternet(GenActivity.this)) {
+                                if (Utility.checkInternet(QrScanActivity.this)) {
                                     String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
-                                    new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                                    new StudentAttendancePushCall(QrScanActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
                                 } else {
-                                    Utility.openInternetNotAvailable(GenActivity.this, "");
+                                    Utility.openInternetNotAvailable(QrScanActivity.this, "");
                                 }
                             }
                         } catch (Exception ex) {
@@ -894,7 +961,7 @@ public class GenActivity extends AppCompatActivity {
                 };
                 recyclerViewBind = new StudentDataRecyclerViewBind(finaluserDetailsResults, getApplication(), listener);
                 recyclerView.setAdapter(recyclerViewBind);
-                recyclerView.setLayoutManager(new LinearLayoutManager(GenActivity.this));
+                recyclerView.setLayoutManager(new LinearLayoutManager(QrScanActivity.this));
                 recyclerView.setVisibility(View.VISIBLE);
                 lblDataTitle.setVisibility(View.VISIBLE);
                 lySearchContainer.setVisibility(View.VISIBLE);
@@ -914,11 +981,11 @@ public class GenActivity extends AppCompatActivity {
                             public void click(int index, UserDetailsResult detailsResult) {
                                 try {
                                     if (!detailsResult.getRFIDNumbers().isEmpty()) {
-                                        if (Utility.checkInternet(GenActivity.this)) {
+                                        if (Utility.checkInternet(QrScanActivity.this)) {
                                             String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
-                                            new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                                            new StudentAttendancePushCall(QrScanActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
                                         } else {
-                                            Utility.openInternetNotAvailable(GenActivity.this, "");
+                                            Utility.openInternetNotAvailable(QrScanActivity.this, "");
                                         }
                                     }
                                 } catch (Exception ex) {
@@ -930,19 +997,19 @@ public class GenActivity extends AppCompatActivity {
                         };
                         recyclerViewBind = new StudentDataRecyclerViewBind(lstSearchData, getApplication(), listener);
                         recyclerView.setAdapter(recyclerViewBind);
-                        recyclerView.setLayoutManager(new LinearLayoutManager(GenActivity.this));
+                        recyclerView.setLayoutManager(new LinearLayoutManager(QrScanActivity.this));
                         recyclerView.setVisibility(View.VISIBLE);
                         lblDataTitle.setVisibility(View.VISIBLE);
                         lySearchContainer.setVisibility(View.VISIBLE);
                     } else {
-                        Utility.openInternetNotAvailable(GenActivity.this, "No user(s) found, try other search.");
+                        Utility.openInternetNotAvailable(QrScanActivity.this, "No user(s) found, try other search.");
                     }
                 }
             }
 
 
         } catch (Exception ex) {
-            Utility.openInternetNotAvailable(GenActivity.this, "Err: " + ex.toString());
+            Utility.openInternetNotAvailable(QrScanActivity.this, "Err: " + ex.toString());
         }
     }
 
@@ -957,10 +1024,10 @@ public class GenActivity extends AppCompatActivity {
 //                    deviceType = "gate";
 //                    gateSwitch.setChecked(true);
 //                }
-////               if (Utility.checkInternet(GenActivity.this)) {
-////                    new GenActivity.StudentDataCall(GenActivity.this, (GenActivity.StudentDataCall) null).execute();
+////               if (Utility.checkInternet(QrScanActivity.this)) {
+////                    new QrScanActivity.StudentDataCall(QrScanActivity.this, (QrScanActivity.StudentDataCall) null).execute();
 ////                } else {
-////                    Utility.openInternetNotAvailable(GenActivity.this,"");
+////                    Utility.openInternetNotAvailable(QrScanActivity.this,"");
 ////                }
 //                Log.e("bus", String.valueOf(isChecked));
 //            }
@@ -972,29 +1039,30 @@ public class GenActivity extends AppCompatActivity {
 //                    deviceType = "bus";
 //                    busSwitch.setChecked(true);
 //                }
-////                if (isChecked) {
-////                    deviceType = "gate";
-////                    if (busSwitch.isChecked()) {
-////                        busSwitch.setChecked(false);
-////                    }
-////                }
-////                else {
-////                    deviceType = "bus";
-////                    busSwitch.setChecked(!busSwitch.isChecked());
-////                }
-////
-////               if (Utility.checkInternet(GenActivity.this)) {
-////                    new GenActivity.StudentDataCall(GenActivity.this, (GenActivity.StudentDataCall) null).execute();
-////                } else {
-////                    Utility.openInternetNotAvailable(GenActivity.this,"");
-////                }
+
+    /// /                if (isChecked) {
+    /// /                    deviceType = "gate";
+    /// /                    if (busSwitch.isChecked()) {
+    /// /                        busSwitch.setChecked(false);
+    /// /                    }
+    /// /                }
+    /// /                else {
+    /// /                    deviceType = "bus";
+    /// /                    busSwitch.setChecked(!busSwitch.isChecked());
+    /// /                }
+    /// /
+    /// /               if (Utility.checkInternet(QrScanActivity.this)) {
+    /// /                    new QrScanActivity.StudentDataCall(QrScanActivity.this, (QrScanActivity.StudentDataCall) null).execute();
+    /// /                } else {
+    /// /                    Utility.openInternetNotAvailable(QrScanActivity.this,"");
+    /// /                }
 //                Log.e("gate", String.valueOf(isChecked));
 //            }
 //        }
 //    }
 
-    //todo rfid card reader
-    //#region BackGroundTask
+//todo rfid card reader
+//#region BackGroundTask
     private class KeyGenerator extends AsyncTask<Intent, Void, String> {
         ProgressDialog progressDialog;
 
@@ -1010,22 +1078,22 @@ public class GenActivity extends AppCompatActivity {
             this.progressDialog = null;
         }
 
-        /* synthetic */ KeyGenerator(GenActivity keyGeneratorActivity, KeyGenerator keyGenerator) {
+        /* synthetic */ KeyGenerator(QrScanActivity keyGeneratorActivity, KeyGenerator keyGenerator) {
             this();
         }
 
         /* access modifiers changed from: protected */
         public void onPreExecute() {
-            this.progressDialog = ProgressDialog.show(GenActivity.this, "Please wait...", "Don't remove the card.");
-            this.reading_data = GenActivity.this.findViewById(R.id.reading_data);
-            this.lnUserInformation = GenActivity.this.findViewById(R.id.lnUserInformation);
-            this.lnEmpCode = GenActivity.this.findViewById(R.id.lnEmpCode);
-            this.scanned_data = GenActivity.this.findViewById(R.id.scanned_data);
-            this.txtName = GenActivity.this.findViewById(R.id.txtName);
-            this.txtFacCode = GenActivity.this.findViewById(R.id.txtFacCode);
-            this.txtCardNumber = GenActivity.this.findViewById(R.id.txtCardNumber);
-            this.txtIssueLevel = GenActivity.this.findViewById(R.id.txtIssueLevel);
-            this.txtEmpcode = GenActivity.this.findViewById(R.id.txtEmpCode);
+            this.progressDialog = ProgressDialog.show(QrScanActivity.this, "Please wait...", "Don't remove the card.");
+            this.reading_data = QrScanActivity.this.findViewById(R.id.reading_data);
+            this.lnUserInformation = QrScanActivity.this.findViewById(R.id.lnUserInformation);
+            this.lnEmpCode = QrScanActivity.this.findViewById(R.id.lnEmpCode);
+            this.scanned_data = QrScanActivity.this.findViewById(R.id.scanned_data);
+            this.txtName = QrScanActivity.this.findViewById(R.id.txtName);
+            this.txtFacCode = QrScanActivity.this.findViewById(R.id.txtFacCode);
+            this.txtCardNumber = QrScanActivity.this.findViewById(R.id.txtCardNumber);
+            this.txtIssueLevel = QrScanActivity.this.findViewById(R.id.txtIssueLevel);
+            this.txtEmpcode = QrScanActivity.this.findViewById(R.id.txtEmpCode);
             this.sb = new StringBuilder();
             strName = "";
             strFacCode = "";
@@ -1327,7 +1395,7 @@ public class GenActivity extends AppCompatActivity {
 
                 try {
                     //doStudentVerification();
-                    new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                    new StudentAttendancePushCall(QrScanActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
                 } catch (Exception ex) {
                     Log.e("Error:WebCall", ex.toString());
                 }
@@ -1390,7 +1458,7 @@ public class GenActivity extends AppCompatActivity {
                                         callAttendancePushCallApi();
                                     }
                                 } else {
-                                    Toast.makeText(GenActivity.this, "Please use Valid Card for Attendance", Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(QrScanActivity.this, "Please use Valid Card for Attendance", Toast.LENGTH_SHORT).show();
                                 }
                             } else {
                                 otherCardTapMethod(getStudentRFID, newStrCardNumber);
@@ -1666,7 +1734,7 @@ public class GenActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        Toast.makeText(GenActivity.this, "Please Tap Valid Card", Toast.LENGTH_LONG).show();
+                        Toast.makeText(QrScanActivity.this, "Please Tap Valid Card", Toast.LENGTH_LONG).show();
                     }
                 });
             }
@@ -1724,7 +1792,7 @@ public class GenActivity extends AppCompatActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "This user is denied because of this reason\n" + deniedReason);
+                            AlertDialog alertDialog = MyVariables.getDefaultDialog(QrScanActivity.this, getResources().getString(R.string.app_name), "This user is denied because of this reason\n" + deniedReason);
                             assert alertDialog != null;
                             alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
                                 @Override
@@ -1807,20 +1875,20 @@ public class GenActivity extends AppCompatActivity {
                                         @Override
                                         public void run() {
                                             if (ss) {
-                                                TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                                TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                                 rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
 
-                                                //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                                //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                                 //userName.setText("");
 
                                                 if (finalDetailsResult.UserID > 0) {
-                                                    ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
+                                                    ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
                                                     String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                    TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                    TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                     MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + KeyGenerator.this.strCardNumber + " | " + attendanceTakeTime);
 
@@ -1853,20 +1921,20 @@ public class GenActivity extends AppCompatActivity {
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
-                                            TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                            TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                             rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
 
-                                            //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                            //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                             //userName.setText("");
 
                                             if (finalDetailsResult.UserID > 0) {
-                                                ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
-                                                ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
+                                                ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
                                                 String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
-                                                ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                 MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + KeyGenerator.this.strCardNumber + " | " + attendanceTakeTime);
 
@@ -1912,20 +1980,20 @@ public class GenActivity extends AppCompatActivity {
                                     @Override
                                     public void run() {
                                         if (isSss) {
-                                            TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                            TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                             rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
 
-                                            //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                            //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                             //userName.setText("");
 
                                             if (finalDetailsResult.UserID > 0) {
-                                                ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
-                                                ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
+                                                ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
                                                 String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
-                                                ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                 MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + KeyGenerator.this.strCardNumber + " | " + attendanceTakeTime);
 
@@ -1949,7 +2017,7 @@ public class GenActivity extends AppCompatActivity {
                                         }
                                     }
                                 });
-                                //GenActivity.this.hideLastScanned();
+                                //QrScanActivity.this.hideLastScanned();
                             }
                         } else {
                             setStatus("Error - " + responseMessage, model, false);
@@ -1964,20 +2032,20 @@ public class GenActivity extends AppCompatActivity {
                                 @Override
                                 public void run() {
                                     if (res.getResponseData() != null) {
-                                        TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                        TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                         rd.setText("Attendance not recorded of this user.");
 
-                                        //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                        //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                         //userName.setText("");
 
                                         if (detailsResult.UserID > 0) {
-                                            ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                            ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(detailsResult.UserFullName);
-                                            ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
+                                            ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                            ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(detailsResult.UserFullName);
+                                            ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(KeyGenerator.this.strCardNumber);
                                             String uid = detailsResult.UID.isEmpty() ? "" : detailsResult.UID;
-                                            ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                            ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                            TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                            TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                             MyVariables.scanedCard.add(detailsResult.UserFullName + " | " + KeyGenerator.this.strCardNumber + " | " + "Not taken");
 
@@ -2012,12 +2080,12 @@ public class GenActivity extends AppCompatActivity {
 
                                         MyVariables.lstScannedCard.add(se);
 
-                                        TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                        TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                         rd.setText("Attendance not recorded of this user.");
                                     }
                                 }
                             });
-                            //GenActivity.this.hideLastScanned();
+                            //QrScanActivity.this.hideLastScanned();
                         }
                     }
 
@@ -2029,7 +2097,7 @@ public class GenActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "This scanned card is not found in the system.");
+                        AlertDialog alertDialog = MyVariables.getDefaultDialog(QrScanActivity.this, getResources().getString(R.string.app_name), "This scanned card is not found in the system.");
                         assert alertDialog != null;
                         alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
                             @Override
@@ -2048,7 +2116,7 @@ public class GenActivity extends AppCompatActivity {
                 @Override
                 public void run() {
                     if (!tapAlertDialog.isShowing())
-                        tapAlertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), msg);
+                        tapAlertDialog = MyVariables.getDefaultDialog(QrScanActivity.this, getResources().getString(R.string.app_name), msg);
 
                     assert tapAlertDialog != null;
                     tapAlertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Cancel", new DialogInterface.OnClickListener() {
@@ -2069,7 +2137,7 @@ public class GenActivity extends AppCompatActivity {
                                     callAttendancePushCallApi();
                                 }
                             }).start();
-//                            Handler mainHandler = new Handler(GenActivity.this.getMainLooper());
+//                            Handler mainHandler = new Handler(QrScanActivity.this.getMainLooper());
 //                            Runnable myRunnable = new Runnable() {
 //                                @Override
 //                                public void run() {
@@ -2141,7 +2209,7 @@ public class GenActivity extends AppCompatActivity {
 //
 //        }
 //
-//        /* synthetic */ WebCall(GenActivity webCallActivity, GenActivity.WebCall webCall) {
+//        /* synthetic */ WebCall(QrScanActivity webCallActivity, QrScanActivity.WebCall webCall) {
 //            this();
 //        }
 //
@@ -2167,13 +2235,13 @@ public class GenActivity extends AppCompatActivity {
 //                webService.sendPostRequest("/ExternalAPI/UserAttendanceNFCMobileDataPush", paramsList, new VolleyCallback() {
 //                    @Override
 //                    public void onSuccess(String result) {
-//                        GenActivity.WebCall.this.setData(result);
-//                        //GenActivity.WebCall.this.data = result;
+//                        QrScanActivity.WebCall.this.setData(result);
+//                        //QrScanActivity.WebCall.this.data = result;
 //                    }
 //                });
 //            } catch (Exception ex) {
 //                ex.printStackTrace();
-//                Toast.makeText(GenActivity.this, "Error: " + ex.toString(), Toast.LENGTH_LONG);
+//                Toast.makeText(QrScanActivity.this, "Error: " + ex.toString(), Toast.LENGTH_LONG);
 //            }
 //            return "";
 //        }
@@ -2186,7 +2254,7 @@ public class GenActivity extends AppCompatActivity {
 //                Log.v("ResponseData", responseModel.getResponseData());
 //                Log.v("ResponseMessage", responseModel.getResponseMessage());
 //                Log.v("Success", "" + responseModel.isSuccess());
-//                GenActivity.this.progressD.dismiss();
+//                QrScanActivity.this.progressD.dismiss();
 //                runOnUiThread(new Runnable() {
 //                    @Override
 //                    public void run() {
@@ -2208,13 +2276,13 @@ public class GenActivity extends AppCompatActivity {
             this.progressDialog = null;
         }
 
-        /* synthetic */ StudentDataCall(GenActivity genActivity, StudentDataCall webCall) {
+        /* synthetic */ StudentDataCall(QrScanActivity QrScanActivity, StudentDataCall webCall) {
             this();
         }
 
         /* access modifiers changed from: protected */
         public void onPreExecute() {
-            this.progressDialog = ProgressDialog.show(GenActivity.this, "Please wait...", "We are fetching data..");
+            this.progressDialog = ProgressDialog.show(QrScanActivity.this, "Please wait...", "We are fetching data..");
             super.onPreExecute();
         }
 
@@ -2232,7 +2300,7 @@ public class GenActivity extends AppCompatActivity {
                         if (!MyVariables.IsProduction) {
                             Log.i("Api Data", result);
                         }
-                    }catch (Exception e){
+                    } catch (Exception e) {
                     }
                 }
             });
@@ -2251,10 +2319,10 @@ public class GenActivity extends AppCompatActivity {
 
                 if (result.contains("You are not Authorized")) {
                     mToastHandler.showToast(result, Toast.LENGTH_LONG);
-                    startActivity(new Intent(GenActivity.this, SplashScreen.class));
+                    startActivity(new Intent(QrScanActivity.this, SplashScreen.class));
                 } else if (result.contains("Some Error Occured")) {
                     mToastHandler.showToast(result, Toast.LENGTH_LONG);
-                    startActivity(new Intent(GenActivity.this, SplashScreen.class));
+                    startActivity(new Intent(QrScanActivity.this, SplashScreen.class));
                 } else {
                     JSONArray jsonArr = new JSONArray(result);
                     participantJsonList = new ArrayList<>();
@@ -2338,11 +2406,11 @@ public class GenActivity extends AppCompatActivity {
                                 public void click(int index, UserDetailsResult detailsResult) {
                                     try {
                                         if (!detailsResult.getRFIDNumbers().isEmpty()) {
-                                            if (Utility.checkInternet(GenActivity.this)) {
+                                            if (Utility.checkInternet(QrScanActivity.this)) {
                                                 String strCardNumber = detailsResult.getRFIDNumbers().split(",")[0];
-                                                new StudentAttendancePushCall(GenActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
+                                                new StudentAttendancePushCall(QrScanActivity.this, (StudentAttendancePushCall) null).execute(strCardNumber);
                                             } else {
-                                                Utility.openInternetNotAvailable(GenActivity.this, "");
+                                                Utility.openInternetNotAvailable(QrScanActivity.this, "");
                                             }
                                         }
                                     } catch (Exception ex) {
@@ -2354,7 +2422,7 @@ public class GenActivity extends AppCompatActivity {
                             };
                             recyclerViewBind = new StudentDataRecyclerViewBind(finaluserDetailsResults, getApplication(), listener);
                             recyclerView.setAdapter(recyclerViewBind);
-                            recyclerView.setLayoutManager(new LinearLayoutManager(GenActivity.this));
+                            recyclerView.setLayoutManager(new LinearLayoutManager(QrScanActivity.this));
                             recyclerView.setVisibility(View.VISIBLE);
                             lblDataTitle.setVisibility(View.VISIBLE);
                             lySearchContainer.setVisibility(View.VISIBLE);
@@ -2400,13 +2468,13 @@ public class GenActivity extends AppCompatActivity {
             this.progressDialog = null;
         }
 
-        /* synthetic */ StudentAttendancePushCall(GenActivity genActivity, StudentAttendancePushCall webCall) {
+        /* synthetic */ StudentAttendancePushCall(QrScanActivity QrScanActivity, StudentAttendancePushCall webCall) {
             this();
         }
 
         /* access modifiers changed from: protected */
         public void onPreExecute() {
-            this.progressDialog = ProgressDialog.show(GenActivity.this, "Please wait...", "We are recording data..");
+            this.progressDialog = ProgressDialog.show(QrScanActivity.this, "Please wait...", "We are recording data..");
             super.onPreExecute();
             getLastLocation();
         }
@@ -2434,7 +2502,7 @@ public class GenActivity extends AppCompatActivity {
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "This user is denied because of this reason\n" + deniedReason);
+                                    AlertDialog alertDialog = MyVariables.getDefaultDialog(QrScanActivity.this, getResources().getString(R.string.app_name), "This user is denied because of this reason\n" + deniedReason);
                                     assert alertDialog != null;
                                     alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
                                         @Override
@@ -2517,20 +2585,20 @@ public class GenActivity extends AppCompatActivity {
                                                 @Override
                                                 public void run() {
                                                     if (ss) {
-                                                        TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                                        TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                                         rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
 
-                                                        //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                                        //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                                         //userName.setText("");
 
                                                         if (finalDetailsResult.UserID > 0) {
-                                                            ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                            ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
-                                                            ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(strCardNumber);
+                                                            ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                            ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                            ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(strCardNumber);
                                                             String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
-                                                            ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                            ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                            TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                            TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                             MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + strCardNumber + " | " + attendanceTakeTime);
 
@@ -2563,20 +2631,20 @@ public class GenActivity extends AppCompatActivity {
                                             runOnUiThread(new Runnable() {
                                                 @Override
                                                 public void run() {
-                                                    TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                                    TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                                     rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
 
-                                                    //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                                    //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                                     //userName.setText("");
 
                                                     if (finalDetailsResult.UserID > 0) {
-                                                        ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                        ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
-                                                        ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(strCardNumber);
+                                                        ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                        ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                        ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(strCardNumber);
                                                         String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
-                                                        ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                        ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                        TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                        TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                         MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + strCardNumber + " | " + attendanceTakeTime);
 
@@ -2622,20 +2690,20 @@ public class GenActivity extends AppCompatActivity {
                                             @Override
                                             public void run() {
                                                 if (isSss) {
-                                                    TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                                    TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                                     rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
 
-                                                    //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                                    //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                                     //userName.setText("");
 
                                                     if (finalDetailsResult.UserID > 0) {
-                                                        ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                        ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
-                                                        ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(strCardNumber);
+                                                        ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                        ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                        ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(strCardNumber);
                                                         String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
-                                                        ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                        ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                        TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                        TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                         MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + strCardNumber + " | " + attendanceTakeTime);
 
@@ -2659,7 +2727,7 @@ public class GenActivity extends AppCompatActivity {
                                                 }
                                             }
                                         });
-                                        //GenActivity.this.hideLastScanned();
+                                        //QrScanActivity.this.hideLastScanned();
                                     }
                                 } else {
                                     setStatus("Error - " + responseMessage, model, false);
@@ -2674,20 +2742,20 @@ public class GenActivity extends AppCompatActivity {
                                         @Override
                                         public void run() {
                                             if (res.getResponseData() != null) {
-                                                TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                                TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                                 rd.setText("Attendance not recorded of this user.");
 
-                                                //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                                //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                                 //userName.setText("");
 
                                                 if (detailsResult.UserID > 0) {
-                                                    ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(detailsResult.UserFullName);
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(strCardNumber);
+                                                    ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(detailsResult.UserFullName);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(strCardNumber);
                                                     String uid = detailsResult.UID.isEmpty() ? "" : detailsResult.UID;
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                    TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                    TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                     MyVariables.scanedCard.add(detailsResult.UserFullName + " | " + strCardNumber + " | " + "Not taken");
 
@@ -2722,12 +2790,12 @@ public class GenActivity extends AppCompatActivity {
 
                                                 MyVariables.lstScannedCard.add(se);
 
-                                                TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                                TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                                 rd.setText("Attendance not recorded of this user.");
                                             }
                                         }
                                     });
-                                    //GenActivity.this.hideLastScanned();
+                                    //QrScanActivity.this.hideLastScanned();
                                 }
                             }
 
@@ -2739,7 +2807,7 @@ public class GenActivity extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "This scanned card is not found in the system.");
+                                AlertDialog alertDialog = MyVariables.getDefaultDialog(QrScanActivity.this, getResources().getString(R.string.app_name), "This scanned card is not found in the system.");
                                 assert alertDialog != null;
                                 alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
                                     @Override
@@ -2759,7 +2827,7 @@ public class GenActivity extends AppCompatActivity {
 //                runOnUiThread(new Runnable() {
 //                    @Override
 //                    public void run() {
-//                        AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "This scanned card is not found or not configured in the system.");
+//                        AlertDialog alertDialog = MyVariables.getDefaultDialog(QrScanActivity.this, getResources().getString(R.string.app_name), "This scanned card is not found or not configured in the system.");
 //                        assert alertDialog != null;
 //                        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
 //                            @Override
@@ -2792,7 +2860,7 @@ public class GenActivity extends AppCompatActivity {
     }
 
     public void displayScannedDetails() {
-        TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+        TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
         scanned_data.setText("");
         scanned_data.setText("\nYou have scanned below Card(s), today. (" + MyVariables.lstScannedCard.size() + ")");
        /*for (String scancard : MyVariables.scanedCard) {
@@ -2801,7 +2869,7 @@ public class GenActivity extends AppCompatActivity {
 
         scannedDataRecyclerViewBind = new ScannedDataRecyclerViewBind(MyVariables.lstScannedCard, getApplication());
         scannedRCV.setAdapter(scannedDataRecyclerViewBind);
-        scannedRCV.setLayoutManager(new LinearLayoutManager(GenActivity.this));
+        scannedRCV.setLayoutManager(new LinearLayoutManager(QrScanActivity.this));
         scannedRCV.setVisibility(View.VISIBLE);
     }
 
@@ -2912,13 +2980,13 @@ public class GenActivity extends AppCompatActivity {
             this.progressDialog = null;
         }
 
-        /* synthetic */ LogoutCall(GenActivity genActivity, LogoutCall webCall) {
+        /* synthetic */ LogoutCall(QrScanActivity QrScanActivity, LogoutCall webCall) {
             this();
         }
 
         /* access modifiers changed from: protected */
         public void onPreExecute() {
-            this.progressDialog = ProgressDialog.show(GenActivity.this, "Please wait...", "We are recording data..");
+            this.progressDialog = ProgressDialog.show(QrScanActivity.this, "Please wait...", "We are recording data..");
             super.onPreExecute();
             //getLastLocation();
         }
@@ -2977,7 +3045,7 @@ public class GenActivity extends AppCompatActivity {
                                     MyVariables.SCHOOL_GROUP_Name = "";
                                     MyVariables.lstScannedUsers.clear();
 
-                                    startActivity(new Intent(GenActivity.this, SplashScreen.class));
+                                    startActivity(new Intent(QrScanActivity.this, SplashScreen.class));
                                     finish();
                                 }
                             });
@@ -2991,7 +3059,7 @@ public class GenActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        AlertDialog alertDialog = MyVariables.getDefaultDialog(GenActivity.this, getResources().getString(R.string.app_name), "Something went wrong, Please try after sometime.");
+                        AlertDialog alertDialog = MyVariables.getDefaultDialog(QrScanActivity.this, getResources().getString(R.string.app_name), "Something went wrong, Please try after sometime.");
                         assert alertDialog != null;
                         alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, "Close", new DialogInterface.OnClickListener() {
                             @Override
@@ -3014,7 +3082,7 @@ public class GenActivity extends AppCompatActivity {
 
     }
 
-    //#endregion BackGroundTask
+//#endregion BackGroundTask
 
     private boolean checkStoragePermission() {
         int readPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE);
@@ -3037,7 +3105,7 @@ public class GenActivity extends AppCompatActivity {
 
     private void exportToCSVFile() {
         try {
-            exportDataToCSV(GenActivity.this, db);
+            exportDataToCSV(QrScanActivity.this, db);
         } catch (Exception e) {
             Toast.makeText(this, "Failed to download Attendance report", Toast.LENGTH_SHORT).show();
         }
@@ -3050,13 +3118,13 @@ public class GenActivity extends AppCompatActivity {
             this.progressDialog = null;
         }
 
-        /* synthetic */ StudentManualAttendancePushCall(GenActivity genActivity, StudentManualAttendancePushCall webCall) {
+        /* synthetic */ StudentManualAttendancePushCall(QrScanActivity QrScanActivity, StudentManualAttendancePushCall webCall) {
             this();
         }
 
         /* access modifiers changed from: protected */
         public void onPreExecute() {
-            this.progressDialog = ProgressDialog.show(GenActivity.this, "Please wait...", "We are recording data..");
+            this.progressDialog = ProgressDialog.show(QrScanActivity.this, "Please wait...", "We are recording data..");
             super.onPreExecute();
             getLastLocation();
         }
@@ -3118,20 +3186,20 @@ public class GenActivity extends AppCompatActivity {
                                             @Override
                                             public void run() {
                                                 if (ss) {
-                                                    TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                                    TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                                     rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Manual Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
 
-                                                    //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                                    //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                                     //userName.setText("");
 
                                                     if (finalDetailsResult.UserID > 0) {
-                                                        ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                        ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
-                                                        ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(model.getScannedCard());
+                                                        ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                        ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                        ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(model.getScannedCard());
                                                         String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
-                                                        ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                        ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                        TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                        TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                         MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + model.getScannedCard() + " | " + model.getDateTime());
 
@@ -3164,20 +3232,20 @@ public class GenActivity extends AppCompatActivity {
                                         runOnUiThread(new Runnable() {
                                             @Override
                                             public void run() {
-                                                TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                                TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                                 rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Manual Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
 
-                                                //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                                //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                                 //userName.setText("");
 
                                                 if (finalDetailsResult.UserID > 0) {
-                                                    ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(model.getScannedCard());
+                                                    ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(model.getScannedCard());
                                                     String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                    TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                    TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                     MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + model.getScannedCard() + " | " + model.getDateTime());
 
@@ -3223,20 +3291,20 @@ public class GenActivity extends AppCompatActivity {
                                         @Override
                                         public void run() {
                                             if (isSss) {
-                                                TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+                                                TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
                                                 rd.setText(finalDetailsResult.getDeniedReason().isEmpty() ? "Manual Attendance recorded successfully." : finalDetailsResult.getDeniedReason());
 
-                                                //TextView userName = ((TextView) GenActivity.this.findViewById(R.id.userName));
+                                                //TextView userName = ((TextView) QrScanActivity.this.findViewById(R.id.userName));
                                                 //userName.setText("");
 
                                                 if (finalDetailsResult.UserID > 0) {
-                                                    ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(model.getScannedCard());
+                                                    ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(finalDetailsResult.UserFullName);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(model.getScannedCard());
                                                     String uid = finalDetailsResult.UID.isEmpty() ? "" : finalDetailsResult.UID;
-                                                    ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                    ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                    TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                    TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                     MyVariables.scanedCard.add(finalDetailsResult.UserFullName + " | " + model.getScannedCard() + " | " + model.getDateTime());
 
@@ -3260,7 +3328,7 @@ public class GenActivity extends AppCompatActivity {
                                             }
                                         }
                                     });
-                                    //GenActivity.this.hideLastScanned();
+                                    //QrScanActivity.this.hideLastScanned();
                                 }
                             } else {
                                 setStatus("Error -" + responseMessage, model, true);
@@ -3275,17 +3343,17 @@ public class GenActivity extends AppCompatActivity {
                                     @Override
                                     public void run() {
                                         if (res.getResponseData() != null) {
-//                                            TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+//                                            TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
 //                                            rd.setText("Attendance not recorded of this user.");
 
                                             if (detailsResult.UserID > 0) {
-                                                ((LinearLayout) GenActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
-                                                ((TextView) GenActivity.this.findViewById(R.id.txtName)).setText(detailsResult.UserFullName);
-                                                ((TextView) GenActivity.this.findViewById(R.id.txtCardNumber)).setText(model.getScannedCard());
+                                                ((LinearLayout) QrScanActivity.this.findViewById(R.id.lnUserInformation)).setVisibility(View.VISIBLE);
+                                                ((TextView) QrScanActivity.this.findViewById(R.id.txtName)).setText(detailsResult.UserFullName);
+                                                ((TextView) QrScanActivity.this.findViewById(R.id.txtCardNumber)).setText(model.getScannedCard());
                                                 String uid = detailsResult.UID.isEmpty() ? "" : detailsResult.UID;
-                                                ((TextView) GenActivity.this.findViewById(R.id.txtUID)).setText(uid);
+                                                ((TextView) QrScanActivity.this.findViewById(R.id.txtUID)).setText(uid);
 
-                                                TextView scanned_data = ((TextView) GenActivity.this.findViewById(R.id.scanned_data));
+                                                TextView scanned_data = ((TextView) QrScanActivity.this.findViewById(R.id.scanned_data));
 
                                                 MyVariables.scanedCard.add(detailsResult.UserFullName + " | " + model.getScannedCard() + " | " + "Not taken");
 
@@ -3320,12 +3388,12 @@ public class GenActivity extends AppCompatActivity {
 
                                             MyVariables.lstScannedCard.add(se);
 
-//                                            TextView rd = ((TextView) GenActivity.this.findViewById(R.id.reading_data));
+//                                            TextView rd = ((TextView) QrScanActivity.this.findViewById(R.id.reading_data));
 //                                            rd.setText("Attendance not recorded of this user.");
                                         }
                                     }
                                 });
-                                //GenActivity.this.hideLastScanned();
+                                //QrScanActivity.this.hideLastScanned();
                             }
                         }
 
@@ -3499,7 +3567,7 @@ public class GenActivity extends AppCompatActivity {
 
             try {
                 writeDataToCSV("attendance_sheet.csv", data);
-                Toast.makeText(GenActivity.this, "CSV file saved to Downloads folder", Toast.LENGTH_SHORT).show();
+                Toast.makeText(QrScanActivity.this, "CSV file saved to Downloads folder", Toast.LENGTH_SHORT).show();
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -3558,7 +3626,7 @@ public class GenActivity extends AppCompatActivity {
 //            if (!detailsResult.getRFIDNumbers().isEmpty()) {
 //                showAddAnotherUserPopup("Add Another card for attendance User Name : " + detailsResult.getUserName() + " User Id : " + detailsResult.getUID() + " Card Number : " + detailsResult.getRFIDNumbers());
 //            } else {
-//                Toast.makeText(GenActivity.this, "\"Please use Valid Card", Toast.LENGTH_SHORT).show();
+//                Toast.makeText(QrScanActivity.this, "\"Please use Valid Card", Toast.LENGTH_SHORT).show();
 //            }
 //        }
 //    }
@@ -3576,5 +3644,191 @@ public class GenActivity extends AppCompatActivity {
         SharedPreferences.Editor myEdit = sharedPreferences.edit();
         myEdit.putString(MyVariables.DEFAULT_ENUM.DEVICE_TYPE.toString(), deviceType);
         myEdit.apply();
+    }
+
+//    private void checkCameraPermissionAndStartScanner() {
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+//            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+//                    == PackageManager.PERMISSION_GRANTED) {
+//                // Permission already granted
+//                initialiseDetectorsAndSources();
+//            } else {
+//                // Request permission
+//                ActivityCompat.requestPermissions(this,
+//                        new String[]{Manifest.permission.CAMERA},
+//                        CAMERA_PERMISSION_CODE);
+//            }
+//        } else {
+//            // For below Android 6.0, permission is granted at install time
+//            initialiseDetectorsAndSources();
+//        }
+//    }
+
+    private void initialiseDetectorsAndSources() {
+//        Toast.makeText(getApplicationContext(), "Barcode scanner started", Toast.LENGTH_SHORT).show();
+
+        findViewById(R.id.toggleCameraButton).setOnClickListener(v -> switchCamera());
+
+        findViewById(R.id.resetCamera).setOnClickListener(v -> openCamera());
+
+        flashToggleButton = findViewById(R.id.flashToggleButton);
+        flashToggleButton.setOnClickListener(v -> toggleFlash());
+
+        barcodeDetector = new BarcodeDetector.Builder(this)
+                .setBarcodeFormats(Barcode.ALL_FORMATS)
+                .build();
+
+//        if (!barcodeDetector.isOperational()) {
+//            Toast.makeText(this, "Barcode Detector dependencies are not available", Toast.LENGTH_LONG).show();
+//            return;
+//        }
+
+        buildCameraSource(); // <-- Initial camera setup
+        surfaceView.getHolder().setKeepScreenOn(true);
+        surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
+            @Override
+            public void surfaceCreated(SurfaceHolder holder) {
+                openCamera();
+            }
+
+            @Override
+            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+            }
+
+            @Override
+            public void surfaceDestroyed(SurfaceHolder holder) {
+                cameraSource.stop();
+            }
+        });
+
+        barcodeDetector.setProcessor(new Detector.Processor<Barcode>() {
+            @Override
+            public void release() {
+//                Toast.makeText(getApplicationContext(), "To prevent memory leaks barcode scanner has been stopped", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void receiveDetections(Detector.Detections<Barcode> detections) {
+                final SparseArray<Barcode> barCode = detections.getDetectedItems();
+                if (barCode.size() > 0) {
+                    setBarCode(barCode);
+                }
+            }
+        });
+    }
+
+    private void buildCameraSource() {
+        cameraSource = new CameraSource.Builder(this, barcodeDetector)
+                .setFacing(cameraFacing)
+                .setRequestedPreviewSize(640, 480)
+                .setAutoFocusEnabled(true)
+                .build();
+    }
+
+    private void switchCamera() {
+        if (cameraSource != null) {
+            cameraSource.stop();
+            cameraSource.release();
+            cameraSource = null;
+        }
+
+        cameraFacing = (cameraFacing == CameraSource.CAMERA_FACING_BACK)
+                ? CameraSource.CAMERA_FACING_FRONT
+                : CameraSource.CAMERA_FACING_BACK;
+
+        buildCameraSource();
+        openCamera();
+    }
+
+    @SuppressWarnings("deprecation")
+    private void toggleFlash() {
+        if (cameraSource != null) {
+            try {
+                Field[] declaredFields = CameraSource.class.getDeclaredFields();
+                for (Field field : declaredFields) {
+                    if (field.getType() == Camera.class) {
+                        field.setAccessible(true);
+                        Camera camera = (Camera) field.get(cameraSource);
+                        if (camera != null) {
+                            Camera.Parameters params = camera.getParameters();
+                            if (!isFlashOn) {
+                                params.setFlashMode(Camera.Parameters.FLASH_MODE_TORCH);
+                                flashToggleButton.setImageResource(R.drawable.ic_flash_on);
+                            } else {
+                                params.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
+                                flashToggleButton.setImageResource(R.drawable.ic_flash_off);
+                            }
+                            camera.setParameters(params);
+                            isFlashOn = !isFlashOn;
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void openCamera() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (ActivityCompat.checkSelfPermission(QrScanActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    cameraSource.start(surfaceView.getHolder());
+                } else {
+                    ActivityCompat.requestPermissions(QrScanActivity.this, new
+                            String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_CODE);
+                }
+            } else {
+                cameraSource.start(surfaceView.getHolder());
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void setBarCode(final SparseArray<Barcode> barCode) {
+
+        Log.e("Qr Result", barCode.valueAt(0).displayValue);
+
+        // Optionally show result or do something with the scanned value
+        runOnUiThread(() -> {
+            cameraSource.stop();
+            String scannedValue = barCode.valueAt(0).displayValue;
+            try {
+                if (!scannedValue.isEmpty()) {
+                    if (Utility.checkInternet(QrScanActivity.this)) {
+                        String strCardNumber = scannedValue.split(",")[0];
+                        if (!strCardNumber.isEmpty()) {
+                            new QrScanActivity.StudentAttendancePushCall(QrScanActivity.this, (QrScanActivity.StudentAttendancePushCall) null).execute(strCardNumber.replaceAll("[^a-zA-Z0-9]", ""));
+                        }
+                    } else {
+                        Utility.openInternetNotAvailable(QrScanActivity.this, "");
+                    }
+                }
+            } catch (Exception ex) {
+                if (!MyVariables.IsProduction) {
+                    Log.e("Error:WebCall", ex.toString());
+                }
+            }
+        });
+
+        // Restart the camera after 10 seconds
+        handler.postDelayed(this::openCamera, 5_000); // 10 seconds
+
+//        textViewBarCodeValue.post(new Runnable() {
+//            @Override
+//            public void run() {
+//                intentData = barCode.valueAt(0).displayValue;
+//                textViewBarCodeValue.setText(intentData);
+//                copyToClipBoard(intentData);
+//            }
+//        });
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        cameraSource.stop();
     }
 }

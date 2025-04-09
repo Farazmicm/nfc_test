@@ -15,10 +15,10 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:theme="@style/ToolbarColoredBackArrow"
             app:buttonGravity="bottom"
             app:menu="@menu/app_menu_container"
             app:popupTheme="@style/NoActionBar.PopupOverlay"
+            app:theme="@style/ToolbarColoredBackArrow"
             app:title="@string/app_title"
             app:titleTextColor="?attr/colorPrimaryVariant" />
 
@@ -244,11 +244,10 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Reset Master card"
+                        android:textColor="@color/white"
                         android:visibility="gone"
                         app:backgroundTint="@color/teal_700"
-                        android:textColor="@color/white"
-                        app:cornerRadius="10dp"
-                        />
+                        app:cornerRadius="10dp" />
 
 
                     <com.google.android.material.button.MaterialButton
@@ -257,9 +256,9 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="5dp"
                         android:text="Test Api"
+                        android:textColor="@color/white"
                         android:visibility="gone"
                         app:backgroundTint="@color/teal_700"
-                        android:textColor="@color/white"
                         app:cornerRadius="10dp" />
 
                     <com.google.android.material.button.MaterialButton
@@ -268,9 +267,9 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="5dp"
                         android:text="Logout"
+                        android:textColor="@color/white"
                         android:visibility="gone"
                         app:backgroundTint="@color/teal_700"
-                        android:textColor="@color/white"
                         app:cornerRadius="10dp" />
 
                     <com.google.android.material.button.MaterialButton
@@ -279,9 +278,9 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="46dp"
                         android:text="View Data"
-                        app:backgroundTint="@color/teal_700"
                         android:textColor="@color/white"
                         android:visibility="gone"
+                        app:backgroundTint="@color/teal_700"
                         app:cornerRadius="10dp" />
 
                     <TextView
@@ -331,25 +330,27 @@
                         android:orientation="horizontal"
                         android:visibility="gone">
 
-                        <EditText
+                        <androidx.appcompat.widget.AppCompatEditText
                             android:id="@+id/editTextSearchText"
+                            style="@style/CustomCursorEditTextStyle"
                             android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="bottom|center_vertical"
+                            android:layout_height="match_parent"
                             android:hint="Search user..."
-                            android:textColor="@android:color/black" />
-
+                            android:textColor="@color/black"
+                            android:textColorHint="@color/black"
+                            app:backgroundTint="@color/teal_700"
+                            app:hintTextColor="@color/grey" />
 
                         <Button
                             android:id="@+id/btnUserSearch"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
+                            android:layout_marginEnd="10dp"
                             android:gravity="center|center_vertical"
                             android:text="Search"
                             android:textColor="#252121"
                             android:textSize="15sp"
-                            android:visibility="gone"
-                            android:layout_marginEnd="10dp" />
+                            android:visibility="gone" />
                     </LinearLayout>
 
                     <androidx.recyclerview.widget.RecyclerView
@@ -372,23 +373,36 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
         android:layout_marginBottom="16dp"
         app:backgroundTint="@color/teal_700"
         app:srcCompat="@android:drawable/ic_menu_view"
-        app:tint="@color/white"
-        android:layout_marginEnd="16dp" />
+        app:tint="@color/white" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabRefreshMasterCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
+        android:layout_marginEnd="@dimen/fab_margin"
         android:layout_marginBottom="76dp"
         android:visibility="gone"
         app:backgroundTint="@color/teal_700"
         app:srcCompat="@android:drawable/ic_menu_recent_history"
-        app:tint="?attr/colorSurface"
-        android:layout_marginEnd="@dimen/fab_margin" />
+        app:tint="?attr/colorSurface" />
+
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabQrScan"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="@dimen/fab_margin"
+        android:layout_marginBottom="76dp"
+        android:visibility="visible"
+        app:backgroundTint="@color/teal_700"
+        app:srcCompat="@drawable/ic_qr_code_scan"
+        app:tint="@android:color/white" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
 

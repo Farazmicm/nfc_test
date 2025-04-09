@@ -24,4 +24,8 @@
     <style name="ToolbarColoredBackArrow" parent="Theme.Nfc_test">
         <item name="android:textColorSecondary">@color/black</item>
     </style>
+
+   <style name="zxing_CaptureTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+    </style>
 </resources>

@@ -71,6 +71,8 @@ dependencies {
     implementation libs.rootbeer.lib
     implementation libs.opencsv
     implementation libs.glide.v4120
+    //QR Code Scanner library
+    implementation libs.play.services.vision
     annotationProcessor libs.compiler.v4120
 //    //compile files('libs/ksoap2-android-assembly-3.1.1-jar-with-dependencie
 }
