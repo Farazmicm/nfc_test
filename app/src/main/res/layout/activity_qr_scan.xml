@@ -35,18 +35,17 @@
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <SurfaceView
-                android:id="@+id/surfaceView"
+            <androidx.camera.view.PreviewView
+                android:id="@+id/previewView"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_alignParentStart="true"
-                android:layout_centerVertical="true"
+                android:scaleType="fitCenter"
+                app:implementationMode="compatible"
                 android:background="@android:color/transparent"
-                android:visibility="visible"
-                app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent" />
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"/>
 
             <ImageButton
                 android:id="@+id/toggleCameraButton"
@@ -62,7 +61,7 @@
                 app:tint="@android:color/white" />
 
             <ImageButton
-                android:id="@+id/resetCamera"
+                android:id="@+id/resetCameraButton"
                 android:layout_width="56dp"
                 android:layout_height="56dp"
                 android:layout_gravity="bottom|start"
@@ -74,6 +73,7 @@
                 app:layout_constraintEnd_toStartOf="@+id/flashToggleButton"
                 app:layout_constraintStart_toEndOf="@+id/toggleCameraButton"
                 app:tint="@android:color/white" />
+
             <ImageButton
                 android:id="@+id/flashToggleButton"
                 android:layout_width="56dp"

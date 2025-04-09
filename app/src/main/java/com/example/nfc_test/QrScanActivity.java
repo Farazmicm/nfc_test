@@ -9,6 +9,7 @@ import static com.example.nfc_test.Utility.toReversedDec;
 import static com.example.nfc_test.Utility.toReversedHex;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.Context;
@@ -17,7 +18,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.hardware.Camera;
 import android.location.Location;
 import android.location.LocationManager;
 import android.net.Uri;
@@ -37,11 +37,9 @@ import android.text.Editable;
 import android.text.Html;
 import android.text.TextWatcher;
 import android.util.Log;
-import android.util.SparseArray;
+import android.util.Size;
 import android.view.KeyEvent;
 import android.view.MenuItem;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageButton;
@@ -57,6 +55,12 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatEditText;
 import androidx.appcompat.widget.Toolbar;
+import androidx.camera.core.Camera;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -80,12 +84,14 @@ import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
-import com.google.android.gms.vision.CameraSource;
-import com.google.android.gms.vision.Detector;
-import com.google.android.gms.vision.barcode.Barcode;
-import com.google.android.gms.vision.barcode.BarcodeDetector;
 import com.google.android.material.chip.ChipGroup;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.gson.Gson;
+import com.google.mlkit.vision.barcode.BarcodeScanner;
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions;
+import com.google.mlkit.vision.barcode.BarcodeScanning;
+import com.google.mlkit.vision.barcode.common.Barcode;
+import com.google.mlkit.vision.common.InputImage;
 import com.opencsv.CSVWriter;
 
 import org.json.JSONArray;
@@ -95,7 +101,6 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -106,6 +111,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class QrScanActivity extends AppCompatActivity {
 
@@ -159,13 +166,19 @@ public class QrScanActivity extends AppCompatActivity {
     private static final int REQUEST_CODE_MANAGE_EXTERNAL_STORAGE = 101;
     AlertDialog tapAlertDialog;
     private static final int CAMERA_PERMISSION_CODE = 201;
-    SurfaceView surfaceView;
-    private BarcodeDetector barcodeDetector;
-    private CameraSource cameraSource;
     Handler handler = new Handler(Looper.getMainLooper());
-    private int cameraFacing = CameraSource.CAMERA_FACING_BACK;
     private boolean isFlashOn = false;
-    private ImageButton flashToggleButton;
+
+    //Qr Scanner
+    private ImageButton toggleCameraButton, resetCameraButton, flashToggleButton;
+    private PreviewView previewView;
+    private boolean isFrontCamera = false;
+    private CameraSelector cameraSelector;
+    private Camera camera;
+    private ProcessCameraProvider cameraProvider;
+    private BarcodeScanner scanner;
+    private final ExecutorService cameraExecutor = Executors.newSingleThreadExecutor();
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -173,7 +186,21 @@ public class QrScanActivity extends AppCompatActivity {
         setContentView(R.layout.activity_qr_scan);
         db = new DatabaseHandler(QrScanActivity.this);
         tapAlertDialog = MyVariables.getDefaultDialog(QrScanActivity.this, getResources().getString(R.string.app_name), "");
-        surfaceView = findViewById(R.id.surfaceView);
+
+        previewView = findViewById(R.id.previewView);
+        toggleCameraButton = findViewById(R.id.toggleCameraButton);
+        flashToggleButton = findViewById(R.id.flashToggleButton);
+        resetCameraButton = findViewById(R.id.resetCameraButton);
+
+        toggleCameraButton.setOnClickListener(v -> switchCamera());
+        flashToggleButton.setOnClickListener(v -> toggleFlash());
+        resetCameraButton.setOnClickListener(v -> resetCamera());
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            initialiseDetectorsAndSources();
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
+        }
 
 ////        db.deleteAttendanceAllRecords();
 //        Gson gson = new Gson();
@@ -607,7 +634,7 @@ public class QrScanActivity extends AppCompatActivity {
         } else if (requestCode == CAMERA_PERMISSION_CODE) {
             if (grantResults.length > 0 &&
                     grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                openCamera();
+                initialiseDetectorsAndSources();
             } else {
                 // Show rationale or go to settings
                 if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)) {
@@ -647,7 +674,6 @@ public class QrScanActivity extends AppCompatActivity {
                 .setNegativeButton("Cancel", null)
                 .show();
     }
-
 //    @Override
 //    public boolean onCreateOptionsMenu(Menu menu) {
 //        getMenuInflater().inflate(R.menu.app_menu_container, menu);
@@ -882,14 +908,15 @@ public class QrScanActivity extends AppCompatActivity {
         }
     }
 
-    public void onPause() {
+    @Override
+    protected void onPause() {
         super.onPause();
         if (this.nfcAdapter != null) {
             this.nfcAdapter.disableForegroundDispatch(this);
         }
-        cameraSource.release();
     }
 
+    @Override
     public void onResume() {
         super.onResume();
 //        if (!Utility.checkInternet(QrScanActivity.this)) {
@@ -901,12 +928,6 @@ public class QrScanActivity extends AppCompatActivity {
         }
 
         getLastLocation();
-        initialiseDetectorsAndSources();
-        if (surfaceView.getHolder().getSurface() != null && surfaceView.getHolder().getSurface().isValid()) {
-            openCamera();
-        } else {
-            Log.w("CameraActivity", "Surface not valid in onResume, waiting for surfaceCreated");
-        }
     }
 
 //    @Override
@@ -3646,189 +3667,146 @@ public class QrScanActivity extends AppCompatActivity {
         myEdit.apply();
     }
 
-//    private void checkCameraPermissionAndStartScanner() {
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-//            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-//                    == PackageManager.PERMISSION_GRANTED) {
-//                // Permission already granted
-//                initialiseDetectorsAndSources();
-//            } else {
-//                // Request permission
-//                ActivityCompat.requestPermissions(this,
-//                        new String[]{Manifest.permission.CAMERA},
-//                        CAMERA_PERMISSION_CODE);
-//            }
-//        } else {
-//            // For below Android 6.0, permission is granted at install time
-//            initialiseDetectorsAndSources();
-//        }
-//    }
 
     private void initialiseDetectorsAndSources() {
-//        Toast.makeText(getApplicationContext(), "Barcode scanner started", Toast.LENGTH_SHORT).show();
-
-        findViewById(R.id.toggleCameraButton).setOnClickListener(v -> switchCamera());
-
-        findViewById(R.id.resetCamera).setOnClickListener(v -> openCamera());
-
-        flashToggleButton = findViewById(R.id.flashToggleButton);
-        flashToggleButton.setOnClickListener(v -> toggleFlash());
-
-        barcodeDetector = new BarcodeDetector.Builder(this)
-                .setBarcodeFormats(Barcode.ALL_FORMATS)
-                .build();
-
-//        if (!barcodeDetector.isOperational()) {
-//            Toast.makeText(this, "Barcode Detector dependencies are not available", Toast.LENGTH_LONG).show();
-//            return;
-//        }
-
-        buildCameraSource(); // <-- Initial camera setup
-        surfaceView.getHolder().setKeepScreenOn(true);
-        surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
-            @Override
-            public void surfaceCreated(SurfaceHolder holder) {
-                openCamera();
-            }
-
-            @Override
-            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-            }
-
-            @Override
-            public void surfaceDestroyed(SurfaceHolder holder) {
-                cameraSource.stop();
-            }
-        });
-
-        barcodeDetector.setProcessor(new Detector.Processor<Barcode>() {
-            @Override
-            public void release() {
-//                Toast.makeText(getApplicationContext(), "To prevent memory leaks barcode scanner has been stopped", Toast.LENGTH_SHORT).show();
-            }
-
-            @Override
-            public void receiveDetections(Detector.Detections<Barcode> detections) {
-                final SparseArray<Barcode> barCode = detections.getDetectedItems();
-                if (barCode.size() > 0) {
-                    setBarCode(barCode);
-                }
-            }
-        });
-    }
-
-    private void buildCameraSource() {
-        cameraSource = new CameraSource.Builder(this, barcodeDetector)
-                .setFacing(cameraFacing)
-                .setRequestedPreviewSize(640, 480)
-                .setAutoFocusEnabled(true)
-                .build();
-    }
-
-    private void switchCamera() {
-        if (cameraSource != null) {
-            cameraSource.stop();
-            cameraSource.release();
-            cameraSource = null;
-        }
-
-        cameraFacing = (cameraFacing == CameraSource.CAMERA_FACING_BACK)
-                ? CameraSource.CAMERA_FACING_FRONT
-                : CameraSource.CAMERA_FACING_BACK;
-
-        buildCameraSource();
-        openCamera();
-    }
-
-    @SuppressWarnings("deprecation")
-    private void toggleFlash() {
-        if (cameraSource != null) {
-            try {
-                Field[] declaredFields = CameraSource.class.getDeclaredFields();
-                for (Field field : declaredFields) {
-                    if (field.getType() == Camera.class) {
-                        field.setAccessible(true);
-                        Camera camera = (Camera) field.get(cameraSource);
-                        if (camera != null) {
-                            Camera.Parameters params = camera.getParameters();
-                            if (!isFlashOn) {
-                                params.setFlashMode(Camera.Parameters.FLASH_MODE_TORCH);
-                                flashToggleButton.setImageResource(R.drawable.ic_flash_on);
-                            } else {
-                                params.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
-                                flashToggleButton.setImageResource(R.drawable.ic_flash_off);
-                            }
-                            camera.setParameters(params);
-                            isFlashOn = !isFlashOn;
-                            break;
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private void openCamera() {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (ActivityCompat.checkSelfPermission(QrScanActivity.this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                    cameraSource.start(surfaceView.getHolder());
-                } else {
-                    ActivityCompat.requestPermissions(QrScanActivity.this, new
-                            String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_CODE);
+            scanner = BarcodeScanning.getClient(new BarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                    .build());
+
+            startCamera();
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void startCamera() {
+        try {
+            ListenableFuture<ProcessCameraProvider> cameraProviderFuture =
+                    ProcessCameraProvider.getInstance(this);
+
+            cameraProviderFuture.addListener(() -> {
+                try {
+                    cameraProvider = cameraProviderFuture.get();
+                    bindPreview();
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-            } else {
-                cameraSource.start(surfaceView.getHolder());
+            }, ContextCompat.getMainExecutor(this));
+        } catch (Exception ex) {
+
+        }
+    }
+
+    private void bindPreview() {
+        try {
+            if (cameraProvider == null) return;
+
+            cameraProvider.unbindAll();
+
+            // This is the actual dynamic cameraSelector (front/back)
+            cameraSelector = new CameraSelector.Builder()
+                    .requireLensFacing(isFrontCamera ? CameraSelector.LENS_FACING_FRONT : CameraSelector.LENS_FACING_BACK)
+                    .build();
+
+            previewView.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
+
+            Preview preview = new Preview.Builder().build();
+            preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+            ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
+                    .setTargetResolution(new Size(640, 480))
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .build();
+
+            imageAnalysis.setAnalyzer(cameraExecutor, image -> {
+                @SuppressLint("UnsafeOptInUsageError")
+                InputImage inputImage = InputImage.fromMediaImage(image.getImage(), image.getImageInfo().getRotationDegrees());
+                scanner.process(inputImage)
+                        .addOnSuccessListener(barcodes -> {
+                            if (!barcodes.isEmpty()) {
+                                handleScannedCode(barcodes.get(0).getRawValue());
+                            }
+                        })
+                        .addOnFailureListener(Throwable::printStackTrace)
+                        .addOnCompleteListener(task -> image.close());
+            });
+            camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
+            if (camera.getCameraInfo().hasFlashUnit()) {
+                Log.d("CameraX", "Flash available!");
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private void setBarCode(final SparseArray<Barcode> barCode) {
+    private void handleScannedCode(String value) {
+        try {
+            runOnUiThread(() -> {
+                // Do your processing here...
+                cameraProvider.unbindAll(); // Stop scanning temporarily
 
-        Log.e("Qr Result", barCode.valueAt(0).displayValue);
-
-        // Optionally show result or do something with the scanned value
-        runOnUiThread(() -> {
-            cameraSource.stop();
-            String scannedValue = barCode.valueAt(0).displayValue;
-            try {
-                if (!scannedValue.isEmpty()) {
-                    if (Utility.checkInternet(QrScanActivity.this)) {
-                        String strCardNumber = scannedValue.split(",")[0];
-                        if (!strCardNumber.isEmpty()) {
-                            new QrScanActivity.StudentAttendancePushCall(QrScanActivity.this, (QrScanActivity.StudentAttendancePushCall) null).execute(strCardNumber.replaceAll("[^a-zA-Z0-9]", ""));
+                // Restart scanning after 5 seconds
+                handler.postDelayed(this::resetCamera, 5000);
+                try {
+                    if (!value.isEmpty()) {
+                        if (Utility.checkInternet(QrScanActivity.this)) {
+                            String strCardNumber = value.split(",")[0];
+                            if (!strCardNumber.isEmpty()) {
+                                new QrScanActivity.StudentAttendancePushCall(QrScanActivity.this, (QrScanActivity.StudentAttendancePushCall) null).execute(strCardNumber.replaceAll("[^a-zA-Z0-9]", ""));
+                            }
+                        } else {
+                            Utility.openInternetNotAvailable(QrScanActivity.this, "");
                         }
                     } else {
-                        Utility.openInternetNotAvailable(QrScanActivity.this, "");
+                        mToastHandler.showToast("Please Try Again,Qr Code is InValid", Toast.LENGTH_SHORT);
+                    }
+                } catch (Exception ex) {
+                    if (!MyVariables.IsProduction) {
+                        Log.e("Error:WebCall", ex.toString());
                     }
                 }
-            } catch (Exception ex) {
-                if (!MyVariables.IsProduction) {
-                    Log.e("Error:WebCall", ex.toString());
-                }
+            });
+        } catch (Exception ex) {
+            if (!MyVariables.IsProduction) {
+                Log.e("handleScannedCode", ex.toString());
             }
-        });
+        }
+    }
 
-        // Restart the camera after 10 seconds
-        handler.postDelayed(this::openCamera, 5_000); // 10 seconds
+    private void resetCamera() {
+        if (cameraProvider != null) {
+            cameraProvider.unbindAll(); // Stop all bound use cases
+            bindPreview(); // Re-bind and restart everything
+        }
+    }
 
-//        textViewBarCodeValue.post(new Runnable() {
-//            @Override
-//            public void run() {
-//                intentData = barCode.valueAt(0).displayValue;
-//                textViewBarCodeValue.setText(intentData);
-//                copyToClipBoard(intentData);
-//            }
-//        });
+    private void toggleFlash() {
+        if (camera.getCameraInfo().hasFlashUnit()) {
+            isFlashOn = !isFlashOn;
+            camera.getCameraControl().enableTorch(isFlashOn);
+            flashToggleButton.setImageResource(isFlashOn ? R.drawable.ic_flash_on : R.drawable.ic_flash_off);
+        }
+    }
+
+    private void switchCamera() {
+        isFrontCamera = !isFrontCamera;
+        if (camera.getCameraInfo().hasFlashUnit()) {
+            isFlashOn = false;
+            camera.getCameraControl().enableTorch(isFlashOn);
+            flashToggleButton.setImageResource(R.drawable.ic_flash_off);
+        }
+        bindPreview();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        cameraSource.stop();
+        if (cameraExecutor != null) {
+            cameraExecutor.shutdown();
+        }
+        if (scanner != null) {
+            scanner.close();
+        }
     }
 }

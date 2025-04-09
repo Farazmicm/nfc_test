@@ -71,8 +71,15 @@ dependencies {
     implementation libs.rootbeer.lib
     implementation libs.opencsv
     implementation libs.glide.v4120
-    //QR Code Scanner library
-    implementation libs.play.services.vision
+    // CameraX core
+    implementation libs.camera.core
+    implementation libs.camera.camera2.v130
+    implementation libs.camera.lifecycle.v130
+    implementation libs.camera.view.v130
+    // ML Kit Barcode scanning
+    implementation libs.barcode.scanning.v1720
+    // ML Kit Barcode Scanning
+    implementation libs.barcode.scanning
     annotationProcessor libs.compiler.v4120
 //    //compile files('libs/ksoap2-android-assembly-3.1.1-jar-with-dependencie
 }

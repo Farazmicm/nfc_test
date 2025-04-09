@@ -1,6 +1,12 @@
 [versions]
 agp = "8.5.1"
 annotation = "1.8.1"
+barcodeScanning = "17.3.0"
+barcodeScanningVersion = "17.3.0"
+cameraCamera2 = "1.3.0"
+cameraCore = "1.4.2"
+cameraLifecycle = "1.3.0"
+cameraView = "1.3.0"
 compiler = "4.12.0"
 espressoCoreVersion = "3.6.1"
 glide = "4.11.0"
@@ -24,6 +30,15 @@ volley = "1.2.1"
 
 [libraries]
 annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
+barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "barcodeScanning" }
+barcode-scanning-v1720 = { module = "com.google.mlkit:barcode-scanning", version.ref = "barcodeScanningVersion" }
+camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cameraCore" }
+camera-camera2-v130 = { module = "androidx.camera:camera-camera2", version.ref = "cameraCamera2" }
+camera-core = { module = "androidx.camera:camera-core", version.ref = "cameraCore" }
+camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "cameraCore" }
+camera-lifecycle-v130 = { module = "androidx.camera:camera-lifecycle", version.ref = "cameraLifecycle" }
+camera-view = { module = "androidx.camera:camera-view", version.ref = "cameraCore" }
+camera-view-v130 = { module = "androidx.camera:camera-view", version.ref = "cameraView" }
 compiler = { module = "com.github.bumptech.glide:compiler", version.ref = "glide" }
 compiler-v4120 = { module = "com.github.bumptech.glide:compiler", version.ref = "compiler" }
 espresso-core-v330 = { module = "androidx.test.espresso:espresso-core", version.ref = "espressoCoreVersion" }
@@ -46,7 +61,7 @@ navigation-fragment = { module = "androidx.navigation:navigation-fragment", vers
 navigation-ui = { module = "androidx.navigation:navigation-ui", version.ref = "navigationFragment" }
 opencsv = { module = "com.opencsv:opencsv", version.ref = "opencsv" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
-play-services-vision = { module = "com.google.android.gms:play-services-vision", version.ref = "playServicesVision" }
+#play-services-vision = { module = "com.google.android.gms:play-services-vision", version.ref = "playServicesVision" }
 rootbeer-lib = { module = "com.scottyab:rootbeer-lib", version.ref = "rootbeerLib" }
 volley = { module = "com.android.volley:volley", version.ref = "volley" }
 
