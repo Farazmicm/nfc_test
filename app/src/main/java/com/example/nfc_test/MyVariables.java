@@ -396,6 +396,7 @@ public class MyVariables extends Application {
         ISDEFAULTMASTERCARDUSE,
         USER_RFID,
         DEVICE_TYPE,
+        FRONT_CAMERA_ENABLE
     }
 
     public static Drawable getCaptchaImage() {

@@ -2968,6 +2968,11 @@ public class GenActivity extends AppCompatActivity {
                                     editor.clear();
                                     editor.commit();
 
+                                    sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.FRONT_CAMERA_ENABLE.toString(), MODE_PRIVATE);
+                                    editor = sharedPreferences.edit();
+                                    editor.clear();
+                                    editor.commit();
+
                                     MyVariables.MCAMPUS_TOKENID = "";
                                     //MyVariables.CARD_AUTH_KEY = new byte[6];
                                     //MyVariables.SECTOR_NUMBER = 0;

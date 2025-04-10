@@ -195,13 +195,11 @@ public class QrScanActivity extends AppCompatActivity {
         toggleCameraButton.setOnClickListener(v -> switchCamera());
         flashToggleButton.setOnClickListener(v -> toggleFlash());
         resetCameraButton.setOnClickListener(v -> resetCamera());
-
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             initialiseDetectorsAndSources();
         } else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_CODE);
         }
-
 ////        db.deleteAttendanceAllRecords();
 //        Gson gson = new Gson();
 //        List<UserAttendanceExternalAPIVM> externalAPIVMList = new ArrayList<UserAttendanceExternalAPIVM>();
@@ -928,6 +926,9 @@ public class QrScanActivity extends AppCompatActivity {
         }
 
         getLastLocation();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            initialiseDetectorsAndSources();
+        }
     }
 
 //    @Override
@@ -3674,6 +3675,8 @@ public class QrScanActivity extends AppCompatActivity {
                     .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
                     .build());
 
+            SharedPreferences sharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.FRONT_CAMERA_ENABLE.toString(), MODE_PRIVATE);
+            isFrontCamera = sharedPreferences.getBoolean(MyVariables.DEFAULT_ENUM.FRONT_CAMERA_ENABLE.toString(), false);
             startCamera();
         } catch (Exception e) {
 
@@ -3791,6 +3794,10 @@ public class QrScanActivity extends AppCompatActivity {
 
     private void switchCamera() {
         isFrontCamera = !isFrontCamera;
+        SharedPreferences mSharedPreferences = getSharedPreferences(MyVariables.DEFAULT_ENUM.FRONT_CAMERA_ENABLE.toString(), MODE_PRIVATE);
+        SharedPreferences.Editor editData = mSharedPreferences.edit();
+        editData.putBoolean(MyVariables.DEFAULT_ENUM.FRONT_CAMERA_ENABLE.toString(), isFrontCamera);
+        editData.commit();
         if (camera.getCameraInfo().hasFlashUnit()) {
             isFlashOn = false;
             camera.getCameraControl().enableTorch(isFlashOn);

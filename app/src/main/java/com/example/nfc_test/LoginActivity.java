@@ -52,6 +52,11 @@ public class LoginActivity extends AppCompatActivity {
 //        txUserName.setText("CHSH250187");
 //        txPassword.setText("Pass@1234");
 //        edtCaptcha.setText("1234");
+//        if (!MyVariables.IsProduction) {
+//            txUserName.setText("liza.patel@micmindia.com,micmadmin");
+//            txPassword.setText("L!#aP1910");
+//        }
+
         webService = new WebService();
         schoolGroupName = findViewById(R.id.schoolGroupName);
         btnChangeSchoolGroup = findViewById(R.id.changeSchoolGroup);
